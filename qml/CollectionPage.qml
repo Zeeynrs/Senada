@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs as Dialogs
+import QtQuick.Layouts
 
 // Playlist, album, liked songs and offline (downloaded) songs.
 Item {
@@ -12,20 +14,43 @@ Item {
 
     function reload() {
         loading = true
+        selectedGroup = null
+        filterQuery = ""
         library.load(kind, itemId)
     }
     Component.onCompleted: reload()
 
     readonly property bool isLocal: !!info.local
-    readonly property var tracks: info.tracks || []
-    // table sorting: "" keeps the collection's own order
+    property string filterQuery: ""
+    property string localView: "songs"   // songs | albums | artists | folders
+    property var selectedGroup: null
+    property int localGroupRev: 0
+    readonly property var tracks: (kind === "local" && selectedGroup) ? (selectedGroup.tracks || []) : (info.tracks || [])
+    readonly property bool showingGroups: kind === "local" && localView !== "songs" && !selectedGroup
+    readonly property var localGroups: {
+        const _rev = localGroupRev
+        const _info = info
+        if (!showingGroups) return []
+        const q = filterQuery.trim().toLowerCase()
+        const all = localfiles.groups(localView) || []
+        if (!q) return all
+        return all.filter(g => String(g.name || "").toLowerCase().includes(q)
+                            || String(g.subtitle || "").toLowerCase().includes(q))
+    }
+    // table sorting + quick filter: "" keeps the collection's own order
     property string sortKey: ""
     property bool sortAsc: true
     readonly property var shown: {
-        const t = tracks.map((x, i) => Object.assign({}, x, { number: i + 1 }))
-        if (!sortKey) return t
+        const q = filterQuery.trim().toLowerCase()
+        const numbered = tracks.map((x, i) => Object.assign({}, x, { number: i + 1 }))
+        const filtered = !q ? numbered : numbered.filter(x =>
+            String(x.name || "").toLowerCase().includes(q)
+            || String(x.artists || "").toLowerCase().includes(q)
+            || String(x.album || "").toLowerCase().includes(q)
+        )
+        if (!sortKey) return filtered
         const k = sortKey, dir = sortAsc ? 1 : -1
-        return t.sort((a, b) => {
+        return filtered.sort((a, b) => {
             const x = a[k], y = b[k]
             if (typeof x === "number" || typeof y === "number") return ((x || 0) - (y || 0)) * dir
             return String(x || "").localeCompare(String(y || ""), undefined, { sensitivity: "base" }) * dir
@@ -63,11 +88,26 @@ Item {
     }
     Connections {  // the music folders were scanned again
         target: localfiles
-        function onChanged() { if (page.kind === "local") library.load(page.kind, page.itemId) }
+        function onChanged() {
+            if (page.kind === "local") {
+                page.selectedGroup = null
+                page.localGroupRev += 1
+                library.load(page.kind, page.itemId)
+            }
+        }
+    }
+
+    Dialogs.FileDialog {
+        id: exportM3uDialog
+        title: I18n.t("Export playlist as M3U")
+        fileMode: Dialogs.FileDialog.SaveFile
+        currentFile: ((info.name || "playlist").replace(/[\\/:*?"<>|]/g, "_") + ".m3u8")
+        nameFilters: [I18n.t("M3U8 playlist") + " (*.m3u8)", I18n.t("M3U playlist") + " (*.m3u)"]
+        onAccepted: library.exportTracksM3u(info.name || page.kind, page.tracks, selectedFile)
     }
 
     function playAt(i) {
-        if (sortKey) {  // sorted view: play in the order shown
+        if (sortKey || filterQuery.trim() !== "" || (page.kind === "local" && page.selectedGroup)) {  // filtered/sorted/group view
             player.playUris(shown.map(x => x.uri), i)
             return
         }
@@ -79,11 +119,11 @@ Item {
     }
     function playAll() { playAt(0) }
     function shuffleAll() {
-        if (info.playUri) {
+        if (info.playUri && filterQuery.trim() === "" && !(page.kind === "local" && page.selectedGroup)) {
             player.shufflePlay(info.playUri)
             return
         }
-        const uris = (info.tracks || []).map(x => x.uri)
+        const uris = (page.filterQuery.trim() !== "" || (page.kind === "local" && page.selectedGroup) ? shown : (info.tracks || [])).map(x => x.uri)
         for (let i = uris.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [uris[i], uris[j]] = [uris[j], uris[i]]
@@ -105,8 +145,8 @@ Item {
                 contentY = originY
             lastOriginY = originY
         }
-        model: page.shown
-        reuseItems: true
+        model: page.showingGroups ? page.localGroups : page.shown
+        reuseItems: page.kind !== "local"
         bottomMargin: Theme.dockSpace
         ScrollBar.vertical: NScrollBar {}
 
@@ -124,6 +164,8 @@ Item {
             saved: (library.savedRevision, library.isSaved(page.kind, page.itemId))
             canImport: page.isSpotify && (page.info.tracks || []).length > 0
             isLocal: page.isLocal
+            canSync: page.kind === "playlist" && page.isLocal && !!page.info.source
+            canExport: !page.info.error && page.tracks.length > 0
             onPlayAll: page.playAll()
             onShuffleAll: page.shuffleAll()
             onSaveToggled: library.toggleSaved(page.info)
@@ -131,6 +173,64 @@ Item {
             onDownloadAll: downloads.download(page.tracks)
             onRenameRequested: Nav.renamePlaylist(page.itemId, page.info.name)
             onDeleteRequested: Nav.deletePlaylist(page.itemId, page.info.name)
+            onSyncRequested: library.syncImportedPlaylist(page.itemId)
+            onDedupeRequested: library.dedupePlaylist(page.itemId)
+            onExportRequested: exportM3uDialog.open()
+          }
+
+          // Local files grouping tabs + track filter bar
+          RowLayout {
+            visible: !page.loading && !page.info.error && (page.kind === "local" || (info.tracks || []).length > 0)
+            width: list.width - 32
+            x: 16
+            height: visible ? 46 : 0
+            spacing: 8
+
+            Row {
+                visible: page.kind === "local"
+                spacing: 6
+                Repeater {
+                    model: [
+                        { key: "songs", label: I18n.t("All songs") },
+                        { key: "albums", label: I18n.t("Albums") },
+                        { key: "artists", label: I18n.t("Artists") },
+                        { key: "folders", label: I18n.t("Folders") }
+                    ]
+                    Chip {
+                        required property var modelData
+                        text: modelData.label
+                        checked: page.localView === modelData.key
+                        onClicked: { page.localView = modelData.key; page.selectedGroup = null }
+                    }
+                }
+            }
+
+            NButton {
+                visible: page.kind === "local" && !!page.selectedGroup
+                iconName: "back"
+                text: page.selectedGroup ? page.selectedGroup.name : ""
+                implicitHeight: 32
+                onClicked: page.selectedGroup = null
+            }
+
+            Item { Layout.fillWidth: true }
+
+            NTextField {
+                id: filterBox
+                visible: (info.tracks || []).length > 0
+                Layout.preferredWidth: 230
+                implicitHeight: 34
+                placeholderText: page.showingGroups ? I18n.t("Filter groups…") : I18n.t("Filter songs…")
+                text: page.filterQuery
+                onTextChanged: page.filterQuery = text
+            }
+            IconButton {
+                visible: page.filterQuery.length > 0
+                iconName: "close"
+                size: 15
+                tip: I18n.t("Clear filter")
+                onClicked: page.filterQuery = ""
+            }
           }
           // offline songs: what is downloading right now
           Item {
@@ -166,7 +266,7 @@ Item {
             }
           }
           TrackTableHeader {
-            visible: page.tracks.length > 0
+            visible: !page.showingGroups && page.tracks.length > 0
             width: list.width
             inset: 16
             showCover: page.kind !== "album"
@@ -177,16 +277,80 @@ Item {
           }
         }
 
-        delegate: TrackRow {
-            inset: 16
-            table: true
-            track: modelData
-            number: modelData.number
-            showCover: page.kind !== "album"
-            showAlbum: page.kind !== "album"
-            removable: page.isLocal
-            onPlay: page.playAt(index)
-            onRemove: library.removeFromPlaylist(page.itemId, modelData.uri)
+        Component {
+            id: trackRowComp
+            TrackRow {
+                inset: 16
+                table: true
+                track: rowData
+                number: rowData.number || (rowIndex + 1)
+                showCover: page.kind !== "album"
+                showAlbum: page.kind !== "album"
+                removable: page.isLocal && page.kind === "playlist"
+                movable: page.isLocal && page.kind === "playlist" && page.filterQuery.trim() === "" && page.sortKey === ""
+                canMoveUp: rowIndex > 0
+                canMoveDown: rowIndex < page.shown.length - 1
+                onPlay: page.playAt(rowIndex)
+                onRemove: library.removeFromPlaylist(page.itemId, rowData.uri)
+                onMoveUp: library.moveInPlaylist(page.itemId, rowIndex, rowIndex - 1)
+                onMoveDown: library.moveInPlaylist(page.itemId, rowIndex, rowIndex + 1)
+            }
+        }
+
+        Component {
+            id: groupRowComp
+            AbstractButton {
+                width: list.width - 32
+                x: 16
+                implicitHeight: 64
+                hoverEnabled: true
+                onClicked: page.selectedGroup = rowData
+                background: Rectangle {
+                    radius: 10
+                    color: parent.hovered ? Theme.hover : "transparent"
+                }
+                contentItem: RowLayout {
+                    spacing: 14
+                    Item { Layout.preferredWidth: 6 }
+                    Cover {
+                        Layout.preferredWidth: 46
+                        Layout.preferredHeight: 46
+                        round: page.localView === "artists"
+                        radius: 8
+                        source: rowData.imageSmall || ""
+                        fallbackIcon: page.localView === "artists" ? "person" : page.localView === "albums" ? "album" : "list"
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Label {
+                            Layout.fillWidth: true
+                            text: rowData.name || ""
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: rowData.subtitle || ""
+                            font.pixelSize: 12
+                            color: Theme.dim
+                            elide: Text.ElideRight
+                        }
+                    }
+                    Icon { glyph: "chevron-right"; size: 18; color: Theme.dim }
+                    Item { Layout.preferredWidth: 6 }
+                }
+            }
+        }
+
+        delegate: Loader {
+            required property var modelData
+            required property int index
+            readonly property var rowData: modelData
+            readonly property int rowIndex: index
+            width: list.width
+            sourceComponent: page.showingGroups ? groupRowComp : trackRowComp
         }
 
         footer: Label {

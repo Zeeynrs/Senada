@@ -250,6 +250,7 @@ class Session(QObject):
         return getter, setter
 
     deviceName = Property(str, *_setting("device_name"), notify=changed)
+    audioQuality = Property(str, *_setting("audio_quality"), notify=changed)
     accentColor = Property(str, *_setting("accent"), notify=changed)
     accentStrength = Property(str, *_setting("accent_strength"), notify=changed)
     visualizerEnabled = Property(bool, *_setting("visualizer"), notify=changed)

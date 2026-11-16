@@ -64,7 +64,7 @@ class Catalog:
             note = tr("Imported from {source}", source=p["source"])
         return {"kind": "playlist", "id": pid, "uri": f"senada:playlist:{pid}", "name": p["name"],
                 "typeLabel": tr("My playlist"), "subtitle": tr("Stored on this device"),
-                "description": p.get("description", ""), "local": True,
+                "description": p.get("description", ""), "source": p.get("source", ""), "local": True,
                 "imageSmall": cover.get("imageSmall", ""), "image": cover.get("image", ""),
                 "imageLarge": cover.get("imageLarge", ""), "tracks": tracks, "note": note,
                 "playUri": f"senada:playlist:{pid}"}

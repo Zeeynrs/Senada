@@ -20,7 +20,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalSocket
 
 from .childproc import popen_tied, release
-from .config import BIN_DIR, CACHE_DIR, IS_WINDOWS, LOG_DIR, NO_WINDOW
+from .config import BIN_DIR, CACHE_DIR, IS_WINDOWS, LOG_DIR, NO_WINDOW, format_for_quality
 from .i18n import tr
 from .logs import MPV_LOG_FILE
 
@@ -102,6 +102,61 @@ def find_tool(name: str) -> str | None:
     return next((str(p) for p in candidates if p.is_file()), None)
 
 
+def filter_audio_devices(raw: list[dict], active_id: str = "auto") -> list[dict]:
+    """Turn mpv's audio-device-list into clean output sinks, omitting redundant low-level backends."""
+    items = []
+    for d in raw or []:
+        if not isinstance(d, dict):
+            continue
+        dev_id = str(d.get("name") or d.get("id") or "").strip()
+        if not dev_id:
+            continue
+        desc = str(d.get("description") or dev_id).strip()
+        items.append({"id": dev_id, "description": desc})
+
+    has_rich = any(
+        d["id"].startswith(("pipewire/", "pulse/", "wasapi/", "coreaudio/", "avfoundation/"))
+        for d in items
+    )
+    pw_descs = {d["description"] for d in items if d["id"].startswith("pipewire/")}
+    noisy_prefixes = ("alsa/surround", "alsa/sysdefault", "alsa/front", "alsa/iec958")
+    dummy_ids = {"openal", "sdl", "sndio", "jack", "pipewire", "pulse", "alsa", "wasapi", "coreaudio"}
+
+    filtered = []
+    for d in items:
+        dev_id = d["id"]
+        if dev_id in ("auto", active_id):
+            filtered.append(d)
+            continue
+        if dev_id in dummy_ids:
+            continue
+        if has_rich and dev_id.startswith(noisy_prefixes):
+            continue
+        if has_rich and dev_id.startswith("alsa/") and not dev_id.startswith("alsa/hdmi"):
+            continue
+        if dev_id.startswith("pulse/") and d["description"] in pw_descs:
+            continue
+        filtered.append(d)
+    return filtered
+
+
+def parse_audio_device_help(text: str) -> list[dict]:
+    """Parse `mpv --audio-device=help` stdout into [{name, description}]."""
+    out = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line.startswith("'") or "'" not in line[1:]:
+            continue
+        end_id = line.find("'", 1)
+        dev_id = line[1:end_id]
+        desc = dev_id
+        rest = line[end_id + 1:].strip()
+        if rest.startswith("(") and rest.endswith(")"):
+            desc = rest[1:-1].strip() or dev_id
+        out.append({"name": dev_id, "description": desc})
+    return out
+
+
 class AudioEngine(QObject):
     positionChanged = Signal(int)    # position in ms
     durationChanged = Signal(int)    # duration in ms
@@ -109,6 +164,8 @@ class AudioEngine(QObject):
     trackEnded = Signal()            # track finished playing
     loadFailed = Signal()            # the file could not be opened or broke off
     errorOccurred = Signal(str)
+    audioDevicesChanged = Signal(list)
+    audioDeviceChanged = Signal(str)
 
     def __init__(self, parent=None, tag=""):
         """tag: names a second mpv next to the first (the crossfade's), with its own IPC
@@ -149,6 +206,9 @@ class AudioEngine(QObject):
         self._skipping = False   # playing through a silence at SKIP_SPEED
         self._speed = 1.0
         self._keep_pitch = True
+        self._audio_device = "auto"
+        self._audio_devices: list[dict] = []
+        self._quality = "best"
 
         self.sock = QLocalSocket(self)
         self.sock.connected.connect(self._on_connected)
@@ -183,7 +243,7 @@ class AudioEngine(QObject):
             "--no-terminal",
             f"--input-ipc-server={self.ipc_path}",
             "--ytdl=yes",
-            "--ytdl-format=bestaudio[ext=m4a]/bestaudio/best",
+            f"--ytdl-format={format_for_quality(self._quality)}",
             "--demuxer-max-bytes=30M",
             "--demuxer-readahead-secs=45",
             "--audio-pitch-correction=yes",
@@ -272,11 +332,15 @@ class AudioEngine(QObject):
                     ["observe_property", 3, "duration"],
                     ["observe_property", 4, "idle-active"],
                     ["observe_property", 5, f"af-metadata/{SILENCE_LABEL}"],
+                    ["observe_property", 6, "audio-device-list"],
+                    ["observe_property", 7, "audio-device"],
                     # mpv 0.39+ would add itself to the Windows media controls next to Senada
                     # (smtc.py), and media keys could reach mpv instead of Senada's queue
                     # (an older mpv answers with an error, which is ignored)
                     ["set_property", "media-controls", False]):
             self._send_command(cmd)
+        if self._audio_device and self._audio_device != "auto":
+            self._send_command(["set_property", "audio-device", self._audio_device])
         # a new mpv (first start, or started again) has none of the effects yet
         self._eq_built = self._af_built = False
         self._apply_tempo()
@@ -351,6 +415,12 @@ class AudioEngine(QObject):
                 self.durationChanged.emit(d_ms)
             elif name == f"af-metadata/{SILENCE_LABEL}":
                 self._on_silence(data)
+            elif name == "audio-device-list" and isinstance(data, list):
+                self._audio_devices = filter_audio_devices(data, self._audio_device)
+                self.audioDevicesChanged.emit(list(self._audio_devices))
+            elif name == "audio-device" and data:
+                self._audio_device = str(data)
+                self.audioDeviceChanged.emit(self._audio_device)
 
         elif event == "end-file":
             self._end_skip()  # a silence at the end of a song is no reason to rush the next one
@@ -449,6 +519,36 @@ class AudioEngine(QObject):
 
     def set_volume(self, pct: int):
         self._send_command(["set_property", "volume", max(0, min(100, pct))])
+
+    def audio_devices(self) -> list[dict]:
+        return list(self._audio_devices)
+
+    def audio_device(self) -> str:
+        return self._audio_device
+
+    def set_audio_device(self, device_id: str):
+        dev = str(device_id or "auto").strip() or "auto"
+        self._audio_device = dev
+        self._send_command(["set_property", "audio-device", dev])
+
+    def probe_audio_devices(self) -> list[dict]:
+        if self._audio_devices:
+            return list(self._audio_devices)
+        mpv_bin = find_tool("mpv")
+        if not mpv_bin:
+            return []
+        try:
+            res = subprocess.run([mpv_bin, "--no-config", "--audio-device=help"],
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                 timeout=5, creationflags=NO_WINDOW)
+            self._audio_devices = filter_audio_devices(parse_audio_device_help(res.stdout), self._audio_device)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return list(self._audio_devices)
+
+    def set_quality(self, quality: str):
+        self._quality = str(quality or "best").lower()
+        self._send_command(["set_property", "ytdl-format", format_for_quality(self._quality)])
 
     # ---- audio effects ----------------------------------------------------------------
 

@@ -22,7 +22,7 @@ Label {
     // dark background); glow: how strong the light is (lower it on a light background)
     property color unsungColor: Qt.rgba(activeColor.r * 0.45, activeColor.g * 0.45, activeColor.b * 0.45, 1)
     property real glowOpacity: 0.85
-    property real position: player ? player.position : 0   // the preview in Settings plays its own clock
+    property real position: (player ? player.position : 0) + (typeof lyrics !== "undefined" && lyrics ? lyrics.offset : 0)   // the preview in Settings plays its own clock
 
     readonly property string plain: (line && line.text) || "♪"
     readonly property bool karaoke: Theme.lyricsHighlight === "karaoke" && current && synced

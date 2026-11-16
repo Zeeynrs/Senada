@@ -6,19 +6,34 @@ Item {
     id: page
     readonly property string pageKey: "search"
     property var results: ({})
+    property var localHits: ({})
     property bool searching: false
     property string lastQuery: ""
     property string filter: "all"  // all | tracks | albums | artists | playlists
     readonly property var tracks: results.tracks || []
+    readonly property var localTracks: results.localTracks || localHits.tracks || []
+    readonly property var localPlaylists: results.localPlaylists || localHits.playlists || []
+    readonly property bool hasLocal: localTracks.length + localPlaylists.length > 0
     readonly property bool hasResults: tracks.length + (results.albums || []).length
-                                       + (results.artists || []).length + (results.playlists || []).length > 0
-    readonly property var suggestions: [
+                                       + (results.artists || []).length + (results.playlists || []).length
+                                       + localTracks.length + localPlaylists.length > 0
+    readonly property var browsePrompts: [
         "Top hits Indonesia", I18n.t("Chill lo-fi"), "Dangdut koplo", I18n.t("Late night jazz"),
         "K-Pop", I18n.t("Sad songs"), I18n.t("Indonesian indie"), I18n.t("Focus music")
     ]
 
     readonly property var disc: library.discover
     readonly property bool typed: field.text.trim() !== ""
+
+    function runSearch(q, saveHistory) {
+        const clean = (q || "").trim()
+        if (!clean) { page.results = {}; page.localHits = {}; library.suggest(""); return }
+        page.localHits = library.localSearch(clean)
+        page.lastQuery = clean
+        page.searching = true
+        if (saveHistory) library.addSearchHistory(clean)
+        library.search(clean)
+    }
 
     Component.onCompleted: { field.forceActiveFocus(); library.refreshDiscover(false) }
     onVisibleChanged: if (visible) library.refreshDiscover(false)
@@ -34,15 +49,14 @@ Item {
     }
 
     Timer {
+        id: suggestDebounce
+        interval: 180
+        onTriggered: library.suggest(field.text)
+    }
+    Timer {
         id: debounce
         interval: 350
-        onTriggered: {
-            const q = field.text.trim()
-            if (!q) { page.results = {}; return }
-            page.lastQuery = q
-            page.searching = true
-            library.search(q)
-        }
+        onTriggered: page.runSearch(field.text, false)
     }
 
     Flickable {
@@ -74,8 +88,14 @@ Item {
                     font.pixelSize: 15
                     iconName: "search"
                     placeholderText: I18n.t("What do you want to hear? (or paste a Spotify/YouTube Music link)")
-                    onTextChanged: debounce.restart()
-                    Keys.onEscapePressed: text = ""
+                    onTextChanged: {
+                        suggestDebounce.restart()
+                        debounce.restart()
+                        if (!text.trim()) { page.localHits = {}; page.results = {} }
+                    }
+                    Keys.onReturnPressed: { debounce.stop(); suggestDebounce.stop(); page.runSearch(field.text, true) }
+                    Keys.onEnterPressed: { debounce.stop(); suggestDebounce.stop(); page.runSearch(field.text, true) }
+                    Keys.onEscapePressed: { text = ""; library.suggest("") }
                 }
                 BusyIndicator {
                     anchors.verticalCenter: parent.verticalCenter
@@ -84,6 +104,26 @@ Item {
                     running: page.searching
                     visible: running
                     implicitWidth: 32; implicitHeight: 32
+                }
+            }
+
+            // live autocomplete suggestions while typing
+            Flow {
+                width: Math.min(720, parent.width)
+                visible: page.typed && !field.text.trim().startsWith("http") && !field.text.trim().startsWith("spotify:") && (library.suggestions || []).length > 0
+                spacing: 8
+                Repeater {
+                    model: library.suggestions || []
+                    Chip {
+                        required property string modelData
+                        text: modelData
+                        onClicked: {
+                            debounce.stop()
+                            suggestDebounce.stop()
+                            field.text = modelData
+                            page.runSearch(modelData, true)
+                        }
+                    }
                 }
             }
 
@@ -112,6 +152,81 @@ Item {
                 text: I18n.t("No results.")
                 color: Theme.dim
                 font.pixelSize: 15
+            }
+
+            Label {
+                visible: page.typed && !!page.results.offline
+                text: I18n.t("Offline — showing matches from your library")
+                color: Theme.dim
+                font.pixelSize: 13
+            }
+
+            // nothing typed: recent search history pills
+            Column {
+                width: parent.width
+                visible: !page.typed && (library.searchHistory || []).length > 0
+                spacing: 12
+                RowLayout {
+                    width: parent.width
+                    Label {
+                        text: I18n.t("Recent searches")
+                        font.pixelSize: 18
+                        font.weight: Font.Bold
+                    }
+                    Item { Layout.fillWidth: true }
+                    LinkLabel {
+                        text: I18n.t("Clear")
+                        font.pixelSize: 13
+                        onClicked: library.clearSearchHistory()
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 8
+                    Repeater {
+                        model: library.searchHistory || []
+                        delegate: Rectangle {
+                            id: histPill
+                            required property string modelData
+                            height: 34
+                            width: Math.min(parent.width, histRow.implicitWidth + 20)
+                            radius: 17
+                            color: histMouse.containsMouse ? Theme.hover : Theme.surface
+                            border.color: histMouse.containsMouse ? Theme.lineStrong : Theme.line
+                            RowLayout {
+                                id: histRow
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Icon { glyph: "clock"; size: 13; color: Theme.dim }
+                                Label {
+                                    text: histPill.modelData
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: 220
+                                }
+                                IconButton {
+                                    iconName: "close"
+                                    size: 12
+                                    tip: I18n.t("Remove")
+                                    onClicked: library.removeSearchHistory(histPill.modelData)
+                                }
+                            }
+                            MouseArea {
+                                id: histMouse
+                                anchors.fill: parent
+                                anchors.rightMargin: 28
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    debounce.stop()
+                                    suggestDebounce.stop()
+                                    field.text = histPill.modelData
+                                    page.runSearch(histPill.modelData, true)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // nothing typed: recommendations from what you listen to (or what is popular)
@@ -197,13 +312,18 @@ Item {
                     width: parent.width
                     spacing: 10
                     Repeater {
-                        model: page.suggestions
+                        model: page.browsePrompts
                         AbstractButton {
                             id: sug
                             width: 200; height: 64
                             hoverEnabled: true
                             focusPolicy: Qt.NoFocus
-                            onClicked: field.text = modelData
+                            onClicked: {
+                                debounce.stop()
+                                suggestDebounce.stop()
+                                field.text = modelData
+                                page.runSearch(modelData, true)
+                            }
                             background: Rectangle {
                                 radius: 14
                                 color: sug.hovered ? Theme.hover : "transparent"
@@ -226,6 +346,31 @@ Item {
                                     font.weight: Font.Bold
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // "Di perpustakaanmu": local files, downloads, liked songs, and own playlists
+            Column {
+                width: parent.width
+                visible: page.typed && page.localTracks.length > 0 && (page.filter === "all" || page.filter === "tracks")
+                spacing: 4
+                Label {
+                    text: I18n.t("In your library")
+                    font.pixelSize: 18
+                    font.weight: Font.Bold
+                    bottomPadding: 4
+                }
+                Repeater {
+                    model: page.filter === "tracks" ? page.localTracks : page.localTracks.slice(0, 5)
+                    TrackRow {
+                        width: parent.width
+                        track: modelData
+                        number: index + 1
+                        onPlay: {
+                            library.addSearchHistory(page.lastQuery || field.text.trim())
+                            player.playUris(page.localTracks.map(x => x.uri), index)
                         }
                     }
                 }
@@ -279,7 +424,10 @@ Item {
                                 size: 24
                                 filled: true
                                 tip: I18n.t("Play")
-                                onClicked: player.playUris(page.tracks.map(x => x.uri), 0)
+                                onClicked: {
+                                    library.addSearchHistory(page.lastQuery || field.text.trim())
+                                    player.playUris(page.tracks.map(x => x.uri), 0)
+                                }
                             }
                         }
                     }
@@ -295,7 +443,10 @@ Item {
                             track: modelData
                             number: index + 1
                             showAlbum: false
-                            onPlay: player.playUris(page.tracks.map(x => x.uri), index)
+                            onPlay: {
+                                library.addSearchHistory(page.lastQuery || field.text.trim())
+                                player.playUris(page.tracks.map(x => x.uri), index)
+                            }
                         }
                     }
                 }
@@ -311,12 +462,16 @@ Item {
                         width: col.width
                         track: modelData
                         number: index + 1
-                        onPlay: player.playUris(page.tracks.map(x => x.uri), index)
+                        onPlay: {
+                            library.addSearchHistory(page.lastQuery || field.text.trim())
+                            player.playUris(page.tracks.map(x => x.uri), index)
+                        }
                     }
                 }
             }
 
             // shelves (Semua) or grids (single filter)
+            Carousel { width: parent.width; visible: page.typed && page.filter === "all" && items.length > 0; title: I18n.t("Your playlists"); items: page.localPlaylists }
             Carousel { width: parent.width; visible: page.filter === "all" && items.length > 0; title: I18n.t("Artists"); items: page.results.artists || [] }
             Carousel { width: parent.width; visible: page.filter === "all" && items.length > 0; title: I18n.t("Albums"); items: page.results.albums || [] }
             Carousel { width: parent.width; visible: page.filter === "all" && items.length > 0; title: I18n.t("Playlists"); items: page.results.playlists || [] }
@@ -325,7 +480,7 @@ Item {
                 visible: page.filter !== "all" && page.filter !== "tracks" && items.length > 0
                 items: page.filter === "albums" ? (page.results.albums || [])
                      : page.filter === "artists" ? (page.results.artists || [])
-                     : page.filter === "playlists" ? (page.results.playlists || []) : []
+                     : page.filter === "playlists" ? page.localPlaylists.concat(page.results.playlists || []) : []
                 rows: 99
                 expanded: true
             }

@@ -7,11 +7,12 @@ saved albums/playlists and history are stored locally.
 import re
 import time
 import urllib.parse
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
-from . import discover, matching, spotify_import, ytmusic
+from . import discover, localfiles, matching, spotify_import, ytmusic
 from .catalog import Catalog
 from .i18n import tr, trn
 from .store import LocalStore
@@ -86,6 +87,79 @@ def youtube_collection(kind: str, cid: str) -> dict:
     return {**page, "source": source}
 
 
+def format_m3u(name: str, tracks: list[dict], path_lookup=None) -> str:
+    """Serialize tracks to an extended M3U8 playlist."""
+    clean_name = str(name or "Playlist").replace("\r", " ").replace("\n", " ").strip()
+    lines = ["#EXTM3U", f"#PLAYLIST:{clean_name}"]
+    for t in tracks or []:
+        if not isinstance(t, dict):
+            continue
+        uri = str(t.get("uri") or "")
+        loc = path_lookup(uri) if path_lookup else None
+        if not loc and uri.startswith("local:file:"):
+            loc = localfiles.path_of(uri)
+        if not loc and uri.startswith("yt:track:"):
+            loc = f"https://music.youtube.com/watch?v={uri.split(':', 2)[2]}"
+        if not loc:
+            loc = uri
+        if not loc:
+            continue
+        dur_ms = int(t.get("durationMs") or 0)
+        dur_s = round(dur_ms / 1000) if dur_ms > 0 else -1
+        title = str(t.get("name") or "").replace("\r", " ").replace("\n", " ").strip()
+        artists = str(t.get("artists") or "").replace("\r", " ").replace("\n", " ").strip()
+        label = f"{artists} - {title}" if artists and title else (title or artists or loc)
+        lines.append(f"#EXTINF:{dur_s},{label}")
+        lines.append(str(loc))
+    return "\n".join(lines) + "\n"
+
+
+def parse_m3u(text: str) -> tuple[str, list[dict]]:
+    """Parse an M3U/M3U8 playlist into (playlist_name, [{type, ...}])."""
+    name = ""
+    items = []
+    pending_title, pending_artists, pending_dur = "", "", 0
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#PLAYLIST:"):
+            name = line.split(":", 1)[1].strip()
+            continue
+        if line.startswith("#EXTINF:"):
+            meta = line[len("#EXTINF:"):]
+            dur_part, _, label = meta.partition(",")
+            try:
+                sec = float(dur_part.strip())
+                pending_dur = max(0, int(sec * 1000)) if sec > 0 else 0
+            except ValueError:
+                pending_dur = 0
+            label = label.strip()
+            if " - " in label:
+                pending_artists, pending_title = [p.strip() for p in label.split(" - ", 1)]
+            else:
+                pending_artists, pending_title = "", label
+            continue
+        if line.startswith("#"):
+            continue
+        yt = _yt_link(line)
+        if yt and yt[0] == "track":
+            items.append({"type": "yt", "uri": f"yt:track:{yt[1]}", "id": yt[1],
+                          "name": pending_title, "artists": pending_artists, "durationMs": pending_dur})
+        elif line.startswith("yt:track:"):
+            vid = line.split(":", 2)[2]
+            items.append({"type": "yt", "uri": line, "id": vid,
+                          "name": pending_title, "artists": pending_artists, "durationMs": pending_dur})
+        elif line.startswith("local:file:"):
+            items.append({"type": "path", "path": localfiles.path_of(line),
+                          "name": pending_title, "artists": pending_artists, "durationMs": pending_dur})
+        else:
+            items.append({"type": "path", "path": line,
+                          "name": pending_title, "artists": pending_artists, "durationMs": pending_dur})
+        pending_title, pending_artists, pending_dur = "", "", 0
+    return name, items
+
+
 class Library(QObject):
     meChanged = Signal()
     playlistsChanged = Signal()
@@ -95,6 +169,8 @@ class Library(QObject):
     savedChanged = Signal()
     loaded = Signal(str, "QVariantMap")  # page key, data
     searchFinished = Signal(str, "QVariantMap")  # query, results
+    suggestionsChanged = Signal()
+    searchHistoryChanged = Signal()
     discoverChanged = Signal()
     artistFound = Signal(str)  # YouTube Music artist id for findArtist()
     playlistCreated = Signal(str)  # new playlist id (e.g. after an import)
@@ -115,6 +191,8 @@ class Library(QObject):
         self._own = []
         self._liked_rev = 0
         self._saved_rev = 0
+        self._suggestions = []
+        self._suggest_seq = 0
         self._discover = {"tracks": [], "artists": [], "albums": [], "personal": False, "loading": False, "error": ""}
         self._discover_seeds = None
         self._discover_at = 0.0
@@ -180,11 +258,23 @@ class Library(QObject):
     def savedRevision(self):
         return self._saved_rev
 
+    @Property("QVariantList", notify=suggestionsChanged)
+    def suggestions(self):
+        return list(self._suggestions)
+
+    @Property("QVariantList", notify=searchHistoryChanged)
+    def searchHistory(self):
+        if hasattr(self.store, "search_history"):
+            items = self.store.search_history()
+            return items if isinstance(items, list) else []
+        return []
+
     def reload(self):
         """The whole library was replaced (a backup restored): everything shown from it follows."""
         self._bump_liked()
         self._saved_rev += 1
         self.savedChanged.emit()
+        self.searchHistoryChanged.emit()
         self.refreshAll()
 
     # ---- internal ----------------------------------------------------------
@@ -319,6 +409,150 @@ class Library(QObject):
 
     # ---- search --------------------------------------------------------------
 
+    def _local_search(self, query: str) -> dict:
+        """Match tracks and own playlists across local files, downloads, liked songs, and playlists."""
+        q = (query or "").strip().lower()
+        tokens = [tok for tok in q.split() if tok]
+        if not tokens:
+            return {"tracks": [], "playlists": []}
+
+        def _safe_list(fn):
+            try:
+                v = fn()
+                return v if isinstance(v, list) else []
+            except Exception:
+                return []
+
+        lf = getattr(self.catalog, "localfiles", None)
+        dl = getattr(self.catalog, "downloads", None)
+        own_playlists = _safe_list(self.store.playlists) if hasattr(self.store, "playlists") else []
+
+        playlist_tracks = []
+        for p in own_playlists:
+            if not isinstance(p, dict):
+                continue
+            if "tracks" in p:
+                playlist_tracks.extend(p.get("tracks") or [])
+            elif hasattr(self.store, "playlist") and p.get("id"):
+                full = self.store.playlist(p["id"])
+                if isinstance(full, dict):
+                    playlist_tracks.extend(full.get("tracks") or [])
+
+        sources = [
+            _safe_list(lf.tracks) if lf is not None and hasattr(lf, "tracks") else [],
+            _safe_list(dl.tracks) if dl is not None and hasattr(dl, "tracks") else [],
+            _safe_list(self.store.liked) if hasattr(self.store, "liked") else [],
+            playlist_tracks,
+        ]
+
+        seen_uris: set[str] = set()
+        seen_keys: set[tuple[str, str]] = set()
+        scored: list[tuple[tuple[int, str], dict]] = []
+        for group in sources:
+            for t in group:
+                if not isinstance(t, dict):
+                    continue
+                uri = t.get("uri", "")
+                name = str(t.get("name") or "")
+                artists = str(t.get("artists") or "")
+                album = str(t.get("album") or "")
+                hay = f"{name} {artists} {album}".lower()
+                if not all(tok in hay for tok in tokens):
+                    continue
+                key = (name.strip().lower(), artists.strip().lower())
+                if (uri and uri in seen_uris) or (any(key) and key in seen_keys):
+                    continue
+                if uri:
+                    seen_uris.add(uri)
+                if any(key):
+                    seen_keys.add(key)
+                nl = name.lower()
+                title_hits = sum(1 for tok in tokens if tok in nl)
+                rank = (0 if nl == q else 1 if nl.startswith(q) else 2 if q in nl else 3 if title_hits == len(tokens) else 4 if title_hits > 0 else 5)
+                scored.append(((rank, -title_hits, nl), dict(t)))
+        scored.sort(key=lambda item: item[0])
+
+        matched_playlists = []
+        for p in own_playlists:
+            if not isinstance(p, dict):
+                continue
+            pname = str(p.get("name") or "")
+            if all(tok in pname.lower() for tok in tokens):
+                n_tracks = p.get("count") if "count" in p else len(p.get("tracks") or [])
+                matched_playlists.append({
+                    "kind": "playlist",
+                    "id": p.get("id", ""),
+                    "name": pname,
+                    "subtitle": trn("{n} song", "{n} songs", int(n_tracks or 0)),
+                    "imageSmall": p.get("imageSmall", "") or p.get("image", ""),
+                    "image": p.get("image", "") or p.get("imageSmall", ""),
+                    "local": True,
+                })
+        return {"tracks": [item[1] for item in scored[:25]], "playlists": matched_playlists[:12]}
+
+    @Slot(str, result="QVariantMap")
+    def localSearch(self, query):
+        res = self._local_search(query)
+        self._cache(res.get("tracks"))
+        return res
+
+    @Slot(str)
+    def suggest(self, query):
+        q = (query or "").strip()
+        self._suggest_seq += 1
+        seq = self._suggest_seq
+        if len(q) < 2 or q.startswith(("http://", "https://", "spotify:")):
+            if self._suggestions:
+                self._suggestions = []
+                self.suggestionsChanged.emit()
+            return
+        hist_hits = [h for h in self.searchHistory if q.lower() in h.lower()]
+
+        def fetch():
+            return ytmusic.suggestions(q)
+
+        def on_done(remote):
+            if seq != self._suggest_seq:
+                return
+            merged, seen = [], set()
+            for item in list(hist_hits) + list(remote or []):
+                text = str(item).strip()
+                if text and text.lower() not in seen:
+                    seen.add(text.lower())
+                    merged.append(text)
+            merged = merged[:8]
+            if merged != self._suggestions:
+                self._suggestions = merged
+                self.suggestionsChanged.emit()
+
+        def on_fail(_e):
+            if seq != self._suggest_seq:
+                return
+            fallback = hist_hits[:8]
+            if fallback != self._suggestions:
+                self._suggestions = fallback
+                self.suggestionsChanged.emit()
+
+        self.worker.run(fetch, on_done, on_fail)
+
+    @Slot(str)
+    def addSearchHistory(self, query):
+        if hasattr(self.store, "add_search_history"):
+            self.store.add_search_history(query)
+            self.searchHistoryChanged.emit()
+
+    @Slot(str)
+    def removeSearchHistory(self, query):
+        if hasattr(self.store, "remove_search_history"):
+            self.store.remove_search_history(query)
+            self.searchHistoryChanged.emit()
+
+    @Slot()
+    def clearSearchHistory(self):
+        if hasattr(self.store, "clear_search_history"):
+            self.store.clear_search_history()
+            self.searchHistoryChanged.emit()
+
     @Slot(str)
     def search(self, query):
         query = query.strip()
@@ -344,11 +578,26 @@ class Library(QObject):
                     return {**empty, "tracks": [t] if t else []}
                 page = self.catalog.load(kind, cid)
                 return {**empty, "tracks": page.get("tracks", [])[:50], kind + "s": [self.catalog.card_for(page)]}
-            return ytmusic.search(query)
+            local = self._local_search(query)
+            try:
+                res = ytmusic.search(query)
+                res["localTracks"] = local["tracks"]
+                res["localPlaylists"] = local["playlists"]
+                return res
+            except ytmusic.YTMusicError as e:
+                if local["tracks"] or local["playlists"]:
+                    return {
+                        **empty,
+                        "localTracks": local["tracks"],
+                        "localPlaylists": local["playlists"],
+                        "offline": True,
+                    }
+                raise e
 
         def on_done(r):
             if isinstance(r, dict):
                 self._cache(r.get("tracks"))
+                self._cache(r.get("localTracks"))
             self.searchFinished.emit(query, r)
 
         self.worker.run(fetch, on_done, lambda e: self.searchFinished.emit(query, {"error": str(e)}))
@@ -410,6 +659,62 @@ class Library(QObject):
     def removeFromPlaylist(self, pid, uri):
         if self.store.remove_from_playlist(pid, uri):
             self._refresh_playlists()
+
+    @Slot(str, int, int)
+    def moveInPlaylist(self, pid, from_idx, to_idx):
+        if self.store.move_in_playlist(pid, int(from_idx), int(to_idx)):
+            self._refresh_playlists()
+
+    @Slot(str)
+    def dedupePlaylist(self, pid):
+        removed = self.store.remove_playlist_duplicates(pid)
+        if removed > 0:
+            self._refresh_playlists()
+            self.toast.emit(trn("Removed {n} duplicate song", "Removed {n} duplicate songs", removed))
+        else:
+            self.toast.emit(tr("No duplicate songs found"))
+
+    @Slot(str)
+    def syncImportedPlaylist(self, pid):
+        pl = self.store.playlist(pid)
+        source = (pl or {}).get("source", "")
+        if not pl or not source:
+            self.toast.emit(tr("Only imported playlists can be synced"))
+            return
+        sp = spotify_import.parse_link(source)
+        yt = None if sp else _yt_link(source, list_first=True)
+        if sp and sp[0] != "track":
+            self.toast.emit(tr("Syncing playlist from Spotify…"))
+            fetch = lambda: spotify_import.fetch(*sp)
+        elif yt and yt[0] in ("playlist", "album"):
+            self.toast.emit(tr("Syncing playlist from YouTube Music…"))
+            fetch = lambda: youtube_collection(*yt)
+        else:
+            self.toast.emit(tr("Only imported playlists can be synced"))
+            return
+
+        old_by_uri = {t.get("uri"): t for t in (pl.get("tracks") or []) if t.get("uri")}
+
+        def on_done(info):
+            fresh = [dict(t) for t in (info or {}).get("tracks") or []]
+            if not fresh:
+                self.toast.emit(tr("No songs found when syncing"))
+                return
+            merged = []
+            for t in fresh:
+                prev = old_by_uri.get(t.get("uri"))
+                if prev:
+                    for k in ("imageSmall", "image", "imageLarge", "matchScore"):
+                        if not t.get(k) and prev.get(k):
+                            t[k] = prev[k]
+                merged.append(t)
+            if self.store.replace_playlist_tracks(pid, merged):
+                self._refresh_playlists()
+                self.toast.emit(trn("Synced {n} song into “{name}”", "Synced {n} songs into “{name}”",
+                                    len(merged), name=pl.get("name", "")))
+                self.matchTracks(merged)
+
+        self.worker.run(fetch, on_done, lambda e: self.toast.emit(str(e)))
 
     @Slot("QVariantMap")
     def importCollection(self, info):
@@ -533,3 +838,105 @@ class Library(QObject):
             self.toast.emit(tr("Paste a link to a playlist or album from Spotify or YouTube Music"))
             return
         self.worker.run(fetch, self.importCollection, lambda e: self.toast.emit(str(e)))
+
+    @Slot(str, str, str)
+    def exportM3u(self, context_uri, file_url, name=""):
+        tracks = self.catalog.tracks_for(context_uri)
+        if not tracks:
+            self.toast.emit(tr("No songs to export"))
+            return
+        if not name and context_uri.startswith("senada:playlist:"):
+            pl = self.store.playlist(context_uri.split(":", 2)[2])
+            name = (pl or {}).get("name", "")
+        self.exportTracksM3u(name or tr("Playlist"), tracks, file_url)
+
+    @Slot(str, "QVariantList", str)
+    def exportTracksM3u(self, name, tracks, file_url):
+        path_str = QUrl(file_url).toLocalFile() if str(file_url).startswith("file:") else str(file_url)
+        if not path_str:
+            return
+        path = Path(path_str)
+        if not path.suffix:
+            path = path.with_suffix(".m3u8")
+        tracks_list = [dict(t) for t in (tracks or []) if isinstance(t, dict)]
+        if not tracks_list:
+            self.toast.emit(tr("No songs to export"))
+            return
+
+        def path_lookup(uri: str) -> str | None:
+            if uri.startswith("local:file:"):
+                return localfiles.path_of(uri)
+            dl = getattr(self.catalog, "downloads", None)
+            return dl.path_for(uri) if dl is not None else None
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(format_m3u(name or path.stem, tracks_list, path_lookup=path_lookup), encoding="utf-8")
+            self.toast.emit(tr("Exported playlist to “{name}”", name=path.name))
+        except OSError as e:
+            self.toast.emit(tr("Could not export playlist: {error}", error=e))
+
+    @Slot(str)
+    def importM3u(self, file_url):
+        path_str = QUrl(file_url).toLocalFile() if str(file_url).startswith("file:") else str(file_url)
+        if not path_str:
+            return
+        path = Path(path_str)
+        if not path.is_file():
+            self.toast.emit(tr("File not found"))
+            return
+
+        def load_m3u():
+            text = path.read_text(encoding="utf-8-sig", errors="replace")
+            title, entries = parse_m3u(text)
+            tracks = []
+            for entry in entries:
+                if entry["type"] == "path":
+                    loc = Path(entry["path"])
+                    if not loc.is_absolute():
+                        loc = path.parent / loc
+                    if loc.is_file():
+                        t = localfiles.read_track(loc)
+                        if entry.get("name") and not t.get("name"):
+                            t["name"] = entry["name"]
+                        tracks.append(t)
+                        continue
+                elif entry["type"] == "yt":
+                    try:
+                        t = ytmusic.track(entry["id"])
+                        if t:
+                            tracks.append(t)
+                            continue
+                    except ytmusic.YTMusicError:
+                        pass
+                    if entry.get("name"):
+                        tracks.append({
+                            "uri": entry["uri"], "id": entry["id"], "name": entry["name"],
+                            "artists": entry.get("artists") or tr("Unknown artist"),
+                            "album": "", "durationMs": entry.get("durationMs", 0),
+                            "explicit": False, "imageSmall": "", "image": "", "imageLarge": "",
+                        })
+                        continue
+                query = f"{entry.get('artists', '')} {entry.get('name', '')}".strip()
+                if query:
+                    try:
+                        hits = ytmusic.search(query).get("tracks") or []
+                        if hits:
+                            tracks.append(hits[0])
+                    except ytmusic.YTMusicError:
+                        pass
+            return {"name": title or path.stem, "tracks": tracks}
+
+        def on_done(res):
+            tracks = res["tracks"]
+            if not tracks:
+                self.toast.emit(tr("No songs found in this M3U file"))
+                return
+            pid = self.store.create_playlist(res["name"], tracks)
+            self._refresh_playlists()
+            self.toast.emit(trn("{n} song imported into “{name}”", "{n} songs imported into “{name}”",
+                                len(tracks), name=res["name"]))
+            self.playlistCreated.emit(pid)
+
+        self.toast.emit(tr("Reading M3U playlist…"))
+        self.worker.run(load_m3u, on_done, lambda e: self.toast.emit(str(e)))

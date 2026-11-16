@@ -14,6 +14,8 @@ Item {
     property bool saved: false
     property bool canImport: false   // public Spotify page: copy into an own playlist
     property bool isLocal: false     // own playlist: rename / delete
+    property bool canSync: false     // imported playlist with source link
+    property bool canExport: false   // has tracks to export to M3U
     property bool canDownload: false // songs can be kept for offline
     property int downloadedCount: 0
     property int trackCount: 0
@@ -27,6 +29,9 @@ Item {
     signal downloadAll()
     signal renameRequested()
     signal deleteRequested()
+    signal syncRequested()
+    signal dedupeRequested()
+    signal exportRequested()
 
     readonly property url art: h.info.imageLarge || h.info.image || ""
     readonly property real coverSide: Math.min(208, Math.max(140, h.width * 0.2))
@@ -114,7 +119,7 @@ Item {
                     id: playPill
                     anchors.verticalCenter: parent.verticalCenter
                     readonly property bool pausable: h.nowPlaying && player.state.isPlaying === true
-                    enabled: !h.loading && (!!h.info.playUri || (h.info.tracks && h.info.tracks.length > 0))
+                    enabled: !h.loading && (!!h.info.playUri || (h.info.tracks || []).length > 0)
                     opacity: enabled ? 1 : 0.4
                     implicitHeight: 40
                     implicitWidth: pillRow.implicitWidth + 32
@@ -178,15 +183,44 @@ Item {
                 }
                 IconButton {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: h.isLocal && !h.loading
+                    visible: (h.isLocal || h.canExport) && !h.loading
                     iconName: "more"
                     size: 18
                     tip: I18n.t("Playlist options")
                     onClicked: moreMenu.popup()
                     NMenu {
                         id: moreMenu
-                        MenuItem { text: I18n.t("Rename…"); onTriggered: h.renameRequested() }
-                        MenuItem { text: I18n.t("Delete playlist…"); onTriggered: h.deleteRequested() }
+                        MenuItem {
+                            visible: h.canExport
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("Export M3U…")
+                            onTriggered: h.exportRequested()
+                        }
+                        MenuItem {
+                            visible: h.canSync
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("Sync from source")
+                            onTriggered: h.syncRequested()
+                        }
+                        MenuItem {
+                            visible: h.isLocal && h.info.kind === "playlist"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("Remove duplicate songs")
+                            onTriggered: h.dedupeRequested()
+                        }
+                        MenuSeparator { visible: h.isLocal && h.info.kind === "playlist" && (h.canExport || h.canSync) }
+                        MenuItem {
+                            visible: h.isLocal && h.info.kind === "playlist"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("Rename…")
+                            onTriggered: h.renameRequested()
+                        }
+                        MenuItem {
+                            visible: h.isLocal && h.info.kind === "playlist"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("Delete playlist…")
+                            onTriggered: h.deleteRequested()
+                        }
                     }
                 }
                 BusyIndicator {

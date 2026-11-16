@@ -16,7 +16,15 @@ Item {
     property bool table: false
     property bool compact: false
     property real inset: 0          // side gutter inside full-width table rows
-    property bool removable: false  // shows "Hapus dari playlist ini" (own playlists)
+    property bool removable: false  // shows "Remove from this playlist" (own playlists)
+    property bool inQueue: false    // queue item: move up/down & remove from queue
+    property int queueOffset: -1
+    property int queueCount: 0
+    property bool movable: false    // own playlist: reorder with Move up / Move down
+    property bool canMoveUp: false
+    property bool canMoveDown: false
+    signal moveUp()
+    signal moveDown()
     readonly property bool isYouTube: (track.uri || "").indexOf("yt:track:") === 0
     readonly property bool current: track.uri !== undefined && player.state.uri === track.uri
     readonly property bool playing: current && player.state.isPlaying
@@ -301,6 +309,7 @@ Item {
         id: menu
         MenuItem { text: I18n.t("Play"); onTriggered: row.play() }
         MenuItem { text: I18n.t("Play radio from this song"); onTriggered: player.playRadio(row.track.uri) }
+        MenuItem { text: I18n.t("Play next"); onTriggered: player.playNext(row.track.uri) }
         MenuItem { text: I18n.t("Add to queue"); onTriggered: player.addToQueue(row.track.uri) }
         MenuItem {
             text: row.liked ? I18n.t("Remove from Liked Songs") : I18n.t("Save to Liked Songs")
@@ -343,6 +352,27 @@ Item {
         }
         MenuItem { text: I18n.t("Go to album"); enabled: !!row.track.albumId; onTriggered: Nav.go("album", row.track.albumId) }
         MenuItem { text: I18n.t("Go to artist"); enabled: !!(row.track.artistId || row.track.artists); onTriggered: Nav.goArtist(row.track) }
+        MenuSeparator { visible: row.inQueue || row.movable }
+        MenuItem {
+            visible: row.inQueue || row.movable
+            height: visible ? implicitHeight : 0
+            enabled: row.inQueue ? row.queueOffset > 0 : row.canMoveUp
+            text: I18n.t("Move up")
+            onTriggered: if (row.inQueue) player.moveInQueue(row.queueOffset, row.queueOffset - 1); else row.moveUp()
+        }
+        MenuItem {
+            visible: row.inQueue || row.movable
+            height: visible ? implicitHeight : 0
+            enabled: row.inQueue ? (row.queueOffset >= 0 && row.queueOffset < row.queueCount - 1) : row.canMoveDown
+            text: I18n.t("Move down")
+            onTriggered: if (row.inQueue) player.moveInQueue(row.queueOffset, row.queueOffset + 1); else row.moveDown()
+        }
+        MenuItem {
+            visible: row.inQueue
+            height: visible ? implicitHeight : 0
+            text: I18n.t("Remove from queue")
+            onTriggered: player.removeFromQueue(row.queueOffset)
+        }
         MenuItem {
             text: I18n.t("Copy song link")
             onTriggered: session.copy(row.isYouTube ? "https://music.youtube.com/watch?v=" + row.track.id

@@ -13,7 +13,7 @@ Explore YouTube Music, sing along with synced lyrics, and bring your favorite pl
 <p><i>Ruang untuk musikmu. Gratis, tanpa akun, tanpa iklan.</i></p>
 
 [![Latest release](https://img.shields.io/github/v/release/Zeeynrs/Senada?label=latest%20release&color=67CDB1)](https://github.com/Zeeynrs/Senada/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Zeeynrs/Senada/total?color=67CDB1)](https://github.com/Zeeynrs/Senada/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Zeeynrs/Senada?label=stars&color=67CDB1)](https://github.com/Zeeynrs/Senada/stargazers)
 [![GPL-3.0 License](https://img.shields.io/badge/open%20source-GPL--3.0-67CDB1)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%2010%2F11%20%7C%20Linux-24292F)
 

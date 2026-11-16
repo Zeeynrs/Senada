@@ -37,6 +37,7 @@ class LocalStore:
             "playlists": data.get("playlists") or [],
             "saved": data.get("saved") or [],
             "history": data.get("history") or [],
+            "searchHistory": data.get("searchHistory") or [],
         }
 
     def _save(self):
@@ -52,7 +53,8 @@ class LocalStore:
     def replace(self, data: dict):
         """Swap the whole library for `data` (a restored backup) and save it."""
         with self._lock:
-            self._data = {k: copy.deepcopy(data.get(k) or []) for k in ("liked", "playlists", "saved", "history")}
+            self._data = {k: copy.deepcopy(data.get(k) or [])
+                          for k in ("liked", "playlists", "saved", "history", "searchHistory")}
             self._save()
 
     # ---- liked songs -----------------------------------------------------
@@ -153,6 +155,52 @@ class LocalStore:
                 return True
         return False
 
+    def move_in_playlist(self, pid: str, from_idx: int, to_idx: int) -> bool:
+        with self._lock:
+            p = next((p for p in self._data["playlists"] if p["id"] == pid), None)
+            if not p:
+                return False
+            tracks = p["tracks"]
+            if not (0 <= from_idx < len(tracks)) or not (0 <= to_idx < len(tracks)) or from_idx == to_idx:
+                return False
+            tracks.insert(to_idx, tracks.pop(from_idx))
+            self._save()
+            return True
+
+    def remove_playlist_duplicates(self, pid: str) -> int:
+        with self._lock:
+            p = next((p for p in self._data["playlists"] if p["id"] == pid), None)
+            if not p:
+                return 0
+            seen_uris, seen_keys, unique = set(), set(), []
+            for t in p["tracks"]:
+                uri = t.get("uri", "")
+                key = (t.get("name", "").strip().lower(), t.get("artists", "").strip().lower())
+                if (uri and uri in seen_uris) or (any(key) and key in seen_keys):
+                    continue
+                if uri:
+                    seen_uris.add(uri)
+                if any(key):
+                    seen_keys.add(key)
+                unique.append(t)
+            removed = len(p["tracks"]) - len(unique)
+            if removed > 0:
+                p["tracks"] = unique
+                self._save()
+            return removed
+
+    def replace_playlist_tracks(self, pid: str, tracks: list[dict], **meta) -> bool:
+        with self._lock:
+            p = next((p for p in self._data["playlists"] if p["id"] == pid), None)
+            if not p:
+                return False
+            p["tracks"] = [_clean_track(t) for t in tracks if isinstance(t, dict) and t.get("uri")]
+            for k in ("imageSmall", "image", "imageLarge", "name"):
+                if meta.get(k):
+                    p[k] = meta[k]
+            self._save()
+            return True
+
     # ---- saved albums / playlists (bookmarks of catalog pages) -----------------
 
     def saved(self) -> list[dict]:
@@ -219,3 +267,37 @@ class LocalStore:
     def history(self, limit: int = 50) -> list[dict]:
         with self._lock:
             return copy.deepcopy(self._data["history"][:limit])
+
+    # ---- search history ----------------------------------------------------
+
+    def search_history(self, limit: int = 12) -> list[str]:
+        with self._lock:
+            return list(self._data.get("searchHistory", [])[:limit])
+
+    def add_search_history(self, query: str, limit: int = 12) -> list[str]:
+        q = (query or "").strip()
+        if not q or q.startswith(("http://", "https://", "spotify:", "yt:", "local:", "senada:")):
+            return self.search_history(limit)
+        with self._lock:
+            items = [x for x in self._data.get("searchHistory", [])
+                     if isinstance(x, str) and x.lower() != q.lower()]
+            items.insert(0, q)
+            self._data["searchHistory"] = items[:limit]
+            self._save()
+            return list(self._data["searchHistory"])
+
+    def remove_search_history(self, query: str) -> list[str]:
+        q = (query or "").strip().lower()
+        with self._lock:
+            items = [x for x in self._data.get("searchHistory", [])
+                     if isinstance(x, str) and x.lower() != q]
+            if len(items) != len(self._data.get("searchHistory", [])):
+                self._data["searchHistory"] = items
+                self._save()
+            return list(items)
+
+    def clear_search_history(self):
+        with self._lock:
+            if self._data.get("searchHistory"):
+                self._data["searchHistory"] = []
+                self._save()

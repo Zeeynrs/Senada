@@ -25,7 +25,9 @@ from .config import NO_WINDOW
 
 logger = logging.getLogger("senada.streams")
 
-AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio/best"
+from .config import AUDIO_FORMATS, NO_WINDOW, format_for_quality
+
+AUDIO_FORMAT = AUDIO_FORMATS["best"]
 # tried in order: the quick player first, then yt-dlp's own default choice
 PLAYER_ARGS = (["--extractor-args", "youtube:player_client=visionos"], [])
 MAX_HOLD = 12         # longest wait (seconds) for an address that is not usable yet
@@ -53,10 +55,18 @@ def watch_url(video_id: str) -> str:
 
 
 class StreamResolver:
-    def __init__(self):
+    def __init__(self, quality: str = "best"):
         self._lock = threading.Lock()
         self._cache: dict[str, dict] = {}              # video id -> {"url", "expires", "available"}
         self._running: dict[str, threading.Event] = {}  # lookups in progress
+        self.quality = str(quality or "best").lower()
+
+    def set_quality(self, quality: str) -> None:
+        q = str(quality or "best").lower()
+        if q != self.quality:
+            self.quality = q
+            with self._lock:
+                self._cache.clear()
 
     def cached(self, video_id: str) -> str | None:
         """The stream address if one is known, usable now and still valid long enough to play."""
@@ -126,7 +136,7 @@ class StreamResolver:
 
     def _run(self, ytdlp: str, extra: list[str], video_id: str) -> tuple[str, float]:
         cmd = [ytdlp, "--no-warnings", "--no-playlist", "--socket-timeout", "10", *extra,
-               "-f", AUDIO_FORMAT, "-O", "%(.{url,available_at})j", watch_url(video_id)]
+               "-f", format_for_quality(self.quality), "-O", "%(.{url,available_at})j", watch_url(video_id)]
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                     text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW)

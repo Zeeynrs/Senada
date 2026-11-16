@@ -48,7 +48,8 @@ Popup {
         { group: "Preferences", key: "audio", icon: "speaker", title: "Audio",
           desc: "Audio engine and streaming quality.",
           words: ["Engine status", "Device name", "Audio quality", "MPV", "Audio engine & streaming (MPV)",
-                  "Even out loudness", "Normalize", "Loudness", "Volume", "Skip silence", "Silence", "Crossfade", "Gapless"] },
+                  "Even out loudness", "Normalize", "Loudness", "Volume", "Skip silence", "Silence", "Crossfade", "Gapless",
+                  "Autoplay", "Similar music"] },
         { group: "Preferences", key: "lyrics", icon: "lyrics", title: "Lyrics",
           desc: "Where synced lyrics come from.",
           words: ["Lyrics source", "Automatic", "BetterLyrics", "LRCLIB", "KuGou", "YouTube Music", "NetEase", "Synced lyrics",
@@ -1127,11 +1128,12 @@ Popup {
                 NCombo {
                     Layout.preferredWidth: 220
                     model: [
-                        { key: "auto", label: I18n.t("Automatic (best)") },
+                        { key: "best", label: I18n.t("Automatic (best)") },
                         { key: "high", label: I18n.t("High (160 kbps Opus)") },
                         { key: "medium", label: I18n.t("Medium (128 kbps)") }
                     ]
-                    value: "auto"
+                    value: session.audioQuality === "auto" ? "best" : (session.audioQuality || "best")
+                    onPicked: (key) => session.audioQuality = key
                 }
             }
             Divider {}
@@ -1141,6 +1143,15 @@ Popup {
                 NSwitch {
                     checked: effects.normalize
                     onToggled: effects.setNormalize(checked)
+                }
+            }
+            Divider {}
+            SettingRow {
+                label: I18n.t("Autoplay")
+                hint: I18n.t("Keep playing similar music automatically when the queue reaches the end.")
+                NSwitch {
+                    checked: player ? player.autoplay : false
+                    onToggled: if (player) player.setAutoplay(checked)
                 }
             }
             SettingRow {
@@ -1349,6 +1360,7 @@ Popup {
         id: remotePage
         ColumnLayout {
             spacing: 0
+            Component.onCompleted: remote.refresh()
             SettingRow {
                 label: I18n.t("Control from your phone")
                 hint: I18n.t("Scan a code with your phone's camera and a remote opens in its browser: play, pause, skip, seek, volume and like. The phone has to be on the same Wi-Fi.")
@@ -1383,15 +1395,22 @@ Popup {
                         Layout.fillWidth: true
                         spacing: 10
                         Label {
+                            id: remoteUrlLabel
                             Layout.fillWidth: true
                             text: remote.url
                             wrapMode: Text.WrapAnywhere
                             font.pixelSize: 13
-                            color: Theme.dim
+                            font.underline: urlHover.hovered
+                            color: urlHover.hovered ? Theme.text : Theme.dim
+                            HoverHandler { id: urlHover; cursorShape: Qt.PointingHandCursor }
+                            TapHandler { onTapped: if (remote.url) Qt.openUrlExternally(remote.url) }
                         }
-                        RowLayout {
+                        Flow {
+                            Layout.fillWidth: true
                             spacing: 10
+                            NButton { text: I18n.t("Open link"); onClicked: if (remote.url) Qt.openUrlExternally(remote.url) }
                             NButton { text: I18n.t("Copy link"); onClicked: session.copy(remote.url) }
+                            NButton { text: I18n.t("Refresh IP"); onClicked: remote.refresh() }
                             NButton { text: I18n.t("New link"); onClicked: remote.newLink() }
                         }
                     }
@@ -1399,7 +1418,7 @@ Popup {
             }
             Divider {}
             Note {
-                text: I18n.t("The first time, Windows may ask whether Senada may use the network: allow it on private networks. The remote works while Senada is open, and only on your own network.")
+                text: I18n.t("The first time, your firewall may ask whether Senada may accept connections on port 8765. Note that public or campus Wi-Fi often enables AP/client isolation (blocking phone-to-PC links) — if the page cannot load on your phone, try a home Wi-Fi or your phone's hotspot.")
             }
         }
     }

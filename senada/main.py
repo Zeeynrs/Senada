@@ -108,6 +108,7 @@ def main():
         lyrics.refreshExtra()
 
     session.languageChanged.connect(on_language)
+    session.changed.connect(player.applyAudioSettings)
     lyrics = Lyrics(player, worker, settings, downloads)
     lyrics.localfiles = localfiles
     effects = AudioEffects(settings, audio_engine)
@@ -127,7 +128,7 @@ def main():
     stats = Stats(plays, player)         # Your stats
     scrobbler = Scrobbler(plays, settings, worker)  # Last.fm / Libre.fm
     scrobbler.toast.connect(session.toast)
-    remote = Remote(player, settings)    # the phone remote (off until switched on)
+    remote = Remote(player, settings, lyrics)    # the phone remote (off until switched on)
     remote.toast.connect(session.toast)
     backup = Backup(store, settings)
     backup.toast.connect(session.toast)
@@ -137,6 +138,7 @@ def main():
     media_controls = None
 
     def on_quit():
+        player.save_playback_state()
         plays.flush()  # the song playing now counts too
         stats.close()
         remote.close()
@@ -176,8 +178,9 @@ def main():
         except Exception as e:  # optional too: the winrt packages are missing, or Windows says no
             print(f"Windows media controls are off: {e}", file=sys.stderr)
 
-    library.refreshAll()
     player.start()
+    player.restore_playback_state()
+    library.refreshAll()
     backup.weekly()
     if localfiles.folders:
         localfiles.rescan()  # songs added or removed while Senada was closed

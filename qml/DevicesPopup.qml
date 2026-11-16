@@ -72,7 +72,9 @@ Popup {
                             color: Theme.text
                         }
                         Label {
-                            text: modelData.active ? I18n.t("Now playing") : modelData.local ? I18n.t("This computer") : modelData.type
+                            text: modelData.active ? I18n.t("Selected output")
+                                : modelData.local  ? I18n.t("Automatic OS default")
+                                : I18n.t("Audio output")
                             font.pixelSize: 12
                             color: Theme.dim
                         }

@@ -1,5 +1,6 @@
 AppShell 1.0 AppShell.qml
 ArtistPage 1.0 ArtistPage.qml
+AudioQuickPopup 1.0 AudioQuickPopup.qml
 Card 1.0 Card.qml
 CardGrid 1.0 CardGrid.qml
 Carousel 1.0 Carousel.qml
@@ -65,5 +66,6 @@ VolumeControl 1.0 VolumeControl.qml
 VolumeRail 1.0 VolumeRail.qml
 SleepTimerButton 1.0 SleepTimerButton.qml
 ShareLyricsDialog 1.0 ShareLyricsDialog.qml
+ShareStatsDialog 1.0 ShareStatsDialog.qml
 RestoreDialog 1.0 RestoreDialog.qml
 StatsPage 1.0 StatsPage.qml

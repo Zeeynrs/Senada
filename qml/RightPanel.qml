@@ -160,7 +160,45 @@ Rectangle {
                     anchors.leftMargin: 18
                     anchors.verticalCenter: parent.verticalCenter
                 }
+                Row {
+                    visible: lyrics.synced && lyrics.status === "ready"
+                    anchors.right: shareLyricsBtn.left
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    IconButton {
+                        iconName: "previous"
+                        size: 13; tint: Theme.dim
+                        tip: I18n.t("Lyrics earlier (-0.5s)")
+                        onClicked: lyrics.adjustOffset(-500)
+                    }
+                    AbstractButton {
+                        implicitHeight: 24
+                        implicitWidth: Math.max(40, rpOffsetLbl.implicitWidth + 10)
+                        anchors.verticalCenter: parent.verticalCenter
+                        hoverEnabled: true
+                        onClicked: lyrics.resetOffset()
+                        ToolTip.visible: hovered
+                        ToolTip.text: I18n.t("Reset lyrics timing")
+                        background: Rectangle { radius: 12; color: parent.hovered ? Theme.hover : "transparent" }
+                        contentItem: Label {
+                            id: rpOffsetLbl
+                            text: (lyrics.offset === 0 ? "0.0s" : (lyrics.offset > 0 ? "+" : "") + (lyrics.offset / 1000).toFixed(1) + "s")
+                            font.pixelSize: 11
+                            color: lyrics.offset === 0 ? Theme.dim : Theme.primary
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                    IconButton {
+                        iconName: "next"
+                        size: 13; tint: Theme.dim
+                        tip: I18n.t("Lyrics later (+0.5s)")
+                        onClicked: lyrics.adjustOffset(500)
+                    }
+                }
                 IconButton {
+                    id: shareLyricsBtn
                     anchors.right: parent.right
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
@@ -206,7 +244,45 @@ Rectangle {
                     onPlay: player.togglePlay()
                 }
                 Item { width: 1; height: 10 }
-                SectionLabel { text: I18n.t("UP NEXT"); visible: q.count > 0 }
+                RowLayout {
+                    width: q.width - 16
+                    x: 8
+                    spacing: 4
+                    Label {
+                        leftPadding: 8
+                        text: I18n.t("UP NEXT")
+                        color: Theme.faint
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.2
+                        visible: q.count > 0 || !!rp.s.hasTrack
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: I18n.t("Autoplay")
+                        color: Theme.dim
+                        font.pixelSize: 11
+                    }
+                    NSwitch {
+                        scale: 0.82
+                        checked: player ? player.autoplay : false
+                        onToggled: if (player) player.setAutoplay(checked)
+                    }
+                    IconButton {
+                        visible: q.count > 0
+                        iconName: "queue-add"
+                        size: 15
+                        tip: I18n.t("Save queue as playlist")
+                        onClicked: Nav.newPlaylist(player.fullQueue())
+                    }
+                    IconButton {
+                        visible: q.count > 0
+                        iconName: "close"
+                        size: 15
+                        tip: I18n.t("Clear queue")
+                        onClicked: player.clearQueue()
+                    }
+                }
                 Label {
                     visible: q.count === 0
                     leftPadding: 16
@@ -223,6 +299,9 @@ Rectangle {
                 width: q.width
                 track: modelData
                 compact: true
+                inQueue: true
+                queueOffset: index
+                queueCount: q.count
                 onPlay: player.skip(index + 1)
             }
         }

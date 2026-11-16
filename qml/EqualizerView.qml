@@ -104,8 +104,9 @@ Item {
                         Layout.fillWidth: true
                     }
 
-                    // Preset selector pill ("Custom ↕")
+                    // Preset selector pill (click to open list / save custom)
                     Rectangle {
+                        id: presetPill
                         implicitWidth: presetRow.implicitWidth + 22
                         implicitHeight: 28
                         radius: 14
@@ -121,7 +122,7 @@ Item {
                                 color: "#ffffff"
                             }
                             Label {
-                                text: "↕"
+                                text: "▾"
                                 font.pixelSize: 11
                                 color: Qt.rgba(1, 1, 1, 0.75)
                             }
@@ -131,7 +132,82 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: eqRoot.nextPreset()
+                            onClicked: presetMenu.opened ? presetMenu.close() : presetMenu.open()
+                        }
+
+                        Popup {
+                            id: presetMenu
+                            x: parent.width - width
+                            y: parent.height + 6
+                            width: 230
+                            padding: 8
+                            focus: true
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                            background: Rectangle {
+                                radius: 14
+                                color: "#1c1e24"
+                                border.color: Qt.rgba(1, 1, 1, 0.14)
+                            }
+                            contentItem: ColumnLayout {
+                                spacing: 4
+                                Repeater {
+                                    model: effects.presetNames
+                                    RowLayout {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        spacing: 4
+                                        AbstractButton {
+                                            Layout.fillWidth: true
+                                            implicitHeight: 30
+                                            hoverEnabled: true
+                                            onClicked: { effects.usePreset(modelData); presetMenu.close() }
+                                            background: Rectangle {
+                                                radius: 8
+                                                color: modelData === eqRoot.presetName ? Qt.rgba(1, 1, 1, 0.16)
+                                                     : parent.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+                                            }
+                                            contentItem: Label {
+                                                leftPadding: 10
+                                                text: modelData
+                                                color: "#ffffff"
+                                                font.pixelSize: 12
+                                                font.weight: modelData === eqRoot.presetName ? Font.Bold : Font.Normal
+                                                verticalAlignment: Text.AlignVCenter
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        IconButton {
+                                            visible: effects.isCustomPreset(modelData)
+                                            iconName: "close"
+                                            size: 13
+                                            tint: Qt.rgba(1, 1, 1, 0.65)
+                                            tip: I18n.t("Delete preset")
+                                            onClicked: effects.deletePreset(modelData)
+                                        }
+                                    }
+                                }
+                                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Qt.rgba(1, 1, 1, 0.1) }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    NTextField {
+                                        id: newPresetField
+                                        Layout.fillWidth: true
+                                        implicitHeight: 30
+                                        placeholderText: I18n.t("New preset name…")
+                                        font.pixelSize: 12
+                                        color: "#ffffff"
+                                        onAccepted: if (effects.savePreset(text)) { text = ""; presetMenu.close() }
+                                    }
+                                    IconButton {
+                                        iconName: "check"
+                                        size: 15
+                                        tint: "#ffffff"
+                                        tip: I18n.t("Save current curve as preset")
+                                        onClicked: if (effects.savePreset(newPresetField.text)) { newPresetField.text = ""; presetMenu.close() }
+                                    }
+                                }
+                            }
                         }
                     }
 

@@ -354,12 +354,26 @@ Rectangle {
             visible: bar.roomy || running  // a running timer stays in sight on a narrow window
         }
         IconButton {
+            id: eqButton
+            anchors.verticalCenter: parent.verticalCenter
+            visible: bar.roomy
+            iconName: "equalizer"; size: 18; tint: Theme.dim
+            active: !!effects && effects.enabled
+            tip: I18n.t("Equalizer & Audio Effects")
+            onClicked: eqPopup.opened ? eqPopup.close() : eqPopup.open()
+            AudioQuickPopup {
+                id: eqPopup
+                x: eqButton.width - width
+                y: -height - 12
+            }
+        }
+        IconButton {
             id: devButton
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.roomy
             iconName: "devices"; size: 18; tint: Theme.dim
             tip: I18n.t("Devices")
-            active: !!bar.s.deviceId && bar.s.deviceId !== "local"
+            active: !!bar.s.deviceId && bar.s.deviceId !== "local" && bar.s.deviceId !== "auto"
             onClicked: devices.opened ? devices.close() : devices.open()
             DevicesPopup {
                 id: devices

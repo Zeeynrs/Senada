@@ -121,7 +121,45 @@ Item {
         hoverTint: "#ffffff"
         fontSize: 13
     }
+    Row {
+        visible: lv.showSource && lyrics.synced && lyrics.status === "ready"
+        anchors.right: lvShareBtn.left
+        anchors.rightMargin: 6
+        anchors.verticalCenter: sourceButton.verticalCenter
+        spacing: 2
+        IconButton {
+            iconName: "previous"
+            size: 13; tint: Qt.rgba(1, 1, 1, 0.6)
+            tip: I18n.t("Lyrics earlier (-0.5s)")
+            onClicked: lyrics.adjustOffset(-500)
+        }
+        AbstractButton {
+            implicitHeight: 24
+            implicitWidth: Math.max(42, lvOffsetLbl.implicitWidth + 10)
+            anchors.verticalCenter: parent.verticalCenter
+            hoverEnabled: true
+            onClicked: lyrics.resetOffset()
+            ToolTip.visible: hovered
+            ToolTip.text: I18n.t("Reset lyrics timing")
+            background: Rectangle { radius: 12; color: parent.hovered ? Qt.rgba(1, 1, 1, 0.14) : "transparent" }
+            contentItem: Label {
+                id: lvOffsetLbl
+                text: (lyrics.offset === 0 ? "0.0s" : (lyrics.offset > 0 ? "+" : "") + (lyrics.offset / 1000).toFixed(1) + "s")
+                font.pixelSize: 11
+                color: lyrics.offset === 0 ? Qt.rgba(1, 1, 1, 0.65) : "#ffffff"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+        IconButton {
+            iconName: "next"
+            size: 13; tint: Qt.rgba(1, 1, 1, 0.6)
+            tip: I18n.t("Lyrics later (+0.5s)")
+            onClicked: lyrics.adjustOffset(500)
+        }
+    }
     IconButton {
+        id: lvShareBtn
         anchors.right: parent.right
         anchors.rightMargin: 10
         anchors.verticalCenter: sourceButton.verticalCenter

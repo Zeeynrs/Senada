@@ -72,7 +72,7 @@ class PlayLog:
             return self._db.execute(sql, args).fetchall()
 
     def summary(self, since: float, buckets: str) -> dict:
-        """Totals, top songs and artists, and minutes per "day" or "month" since `since`."""
+        """Totals, top songs/artists/albums, recent plays, hourly and day/month breakdowns since `since`."""
         total = self._rows("SELECT COUNT(*), COALESCE(SUM(listened_ms), 0), COUNT(DISTINCT uri), "
                            "COUNT(DISTINCT artist) FROM plays WHERE at >= ?", (since,))[0]
         songs = self._rows("""SELECT uri, name, artists, album, image, COUNT(*) AS n, SUM(listened_ms)
@@ -80,17 +80,63 @@ class PlayLog:
         artists = self._rows("""SELECT artist, COUNT(*) AS n, SUM(listened_ms), MAX(image)
             FROM plays WHERE at >= ? AND artist != '' GROUP BY artist
             ORDER BY n DESC, SUM(listened_ms) DESC LIMIT 10""", (since,))
+        albums = self._rows("""SELECT album, MAX(artists), COUNT(*) AS n, SUM(listened_ms), MAX(image)
+            FROM plays WHERE at >= ? AND album != '' GROUP BY album, artist
+            ORDER BY n DESC, SUM(listened_ms) DESC LIMIT 10""", (since,))
+        hour_rows = self._rows("""SELECT CAST(strftime('%H', at, 'unixepoch', 'localtime') AS INTEGER) AS hr,
+            COUNT(*) AS n, SUM(listened_ms) FROM plays WHERE at >= ? GROUP BY hr ORDER BY hr""", (since,))
+        recent = self._rows("""SELECT at, uri, name, artists, album, image, listened_ms
+            FROM plays WHERE at >= ? ORDER BY at DESC LIMIT 15""", (since,))
         fmt = "%Y-%m" if buckets == "month" else "%Y-%m-%d"
         per = self._rows(f"""SELECT strftime('{fmt}', at, 'unixepoch', 'localtime') AS b, SUM(listened_ms)
             FROM plays WHERE at >= ? GROUP BY b ORDER BY b""", (since,))
+        hour_map = {int(r[0]): (int(r[1]), round(r[2] / 60000)) for r in hour_rows if r[0] is not None}
+        by_hour = [{"hour": h, "plays": hour_map.get(h, (0, 0))[0], "minutes": hour_map.get(h, (0, 0))[1]}
+                   for h in range(24)]
         return {
             "plays": total[0], "minutes": round(total[1] / 60000), "songs": total[2], "artists": total[3],
             "topSongs": [{"uri": r[0], "name": r[1], "artists": r[2], "album": r[3], "imageSmall": r[4],
                           "image": r[4], "plays": r[5], "minutes": round(r[6] / 60000)} for r in songs],
             "topArtists": [{"name": r[0], "plays": r[1], "minutes": round(r[2] / 60000), "imageSmall": r[3]}
                            for r in artists],
+            "topAlbums": [{"name": r[0], "artists": r[1], "plays": r[2], "minutes": round(r[3] / 60000),
+                           "imageSmall": r[4]} for r in albums],
+            "byHour": by_hour,
+            "recentPlays": [{"at": float(r[0]), "uri": r[1], "name": r[2], "artists": r[3], "album": r[4],
+                             "imageSmall": r[5], "image": r[5], "minutes": round(r[6] / 60000)}
+                            for r in recent],
             "per": {r[0]: round(r[1] / 60000) for r in per},
         }
+
+    def streaks(self, today: datetime.date | None = None) -> tuple[int, int]:
+        """Return (current_streak_days, longest_streak_days) across all recorded local play dates."""
+        rows = self._rows("""SELECT DISTINCT strftime('%Y-%m-%d', at, 'unixepoch', 'localtime') AS d
+            FROM plays ORDER BY d""")
+        dates = []
+        for (raw,) in rows:
+            if not raw:
+                continue
+            try:
+                dates.append(datetime.date.fromisoformat(raw))
+            except ValueError:
+                continue
+        if not dates:
+            return 0, 0
+        longest = run = 1
+        for i in range(1, len(dates)):
+            if dates[i] == dates[i - 1] + datetime.timedelta(days=1):
+                run += 1
+                longest = max(longest, run)
+            else:
+                run = 1
+        today = today or datetime.date.today()
+        date_set = set(dates)
+        cursor = today if today in date_set else (today - datetime.timedelta(days=1))
+        current = 0
+        while cursor in date_set:
+            current += 1
+            cursor -= datetime.timedelta(days=1)
+        return current, longest
 
     def first_play(self) -> float:
         row = self._rows("SELECT MIN(at) FROM plays")[0]
@@ -157,13 +203,21 @@ class Stats(QObject):
 
     @Slot(str, result="QVariantMap")
     def summary(self, period):
-        """{plays, minutes, songs, artists, topSongs, topArtists, bars: [{key, label, minutes}], since}."""
+        """{plays, minutes, songs, artists, topSongs, topArtists, topAlbums, byHour, recentPlays, streakDays, longestStreak, bars, since}."""
         if self.log is None:
-            return {"plays": 0, "minutes": 0, "songs": 0, "artists": 0, "topSongs": [], "topArtists": [], "bars": []}
+            return {
+                "plays": 0, "minutes": 0, "songs": 0, "artists": 0,
+                "topSongs": [], "topArtists": [], "topAlbums": [],
+                "byHour": [{"hour": h, "plays": 0, "minutes": 0} for h in range(24)],
+                "recentPlays": [], "streakDays": 0, "longestStreak": 0, "bars": [], "since": "",
+            }
         period = period if period in PERIODS else "month"
         data = self.log.summary(period_start(period), "month" if period in ("year", "all") else "day")
-        data["bars"] = bars(data.pop("per"), period, first=self.log.first_play())
         first = self.log.first_play()
+        data["bars"] = bars(data.pop("per"), period, first=first)
+        cur_streak, best_streak = self.log.streaks()
+        data["streakDays"] = cur_streak
+        data["longestStreak"] = best_streak
         data["since"] = (datetime.date.fromtimestamp(first).isoformat() if first else "")
         return data
 

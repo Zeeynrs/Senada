@@ -27,6 +27,9 @@ import zlib
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from . import i18n, matching, net, ytmusic
+from .config import CONFIG_DIR, read_json, write_private
+
+OFFSET_FILE = CONFIG_DIR / "lyrics_offsets.json"
 
 LRC_LINE = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 HEADERS = {"User-Agent": "Senada/0.1 (desktop music player)"}
@@ -459,6 +462,7 @@ class Lyrics(QObject):
     currentChanged = Signal()
     sourceChanged = Signal()
     extraChanged = Signal()
+    offsetChanged = Signal()
 
     def __init__(self, player, worker, settings, downloads=None, parent=None):
         super().__init__(parent)
@@ -479,8 +483,50 @@ class Lyrics(QObject):
         self._from = ""
         self._offline = False  # the lyrics shown are the ones saved with a downloaded song
         self._current = -1
+        self._offsets = self._load_offsets()
+        self._offset = 0
         player.trackChanged.connect(self._on_track)
         player.positionChanged.connect(self._on_position)
+
+    @staticmethod
+    def _load_offsets() -> dict[str, int]:
+        data = read_json(OFFSET_FILE)
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): int(v) for k, v in data.items() if isinstance(k, str) and isinstance(v, (int, float))}
+
+    def _save_offsets(self):
+        try:
+            write_private(OFFSET_FILE, self._offsets)
+        except OSError:
+            pass
+
+    @Property(int, notify=offsetChanged)
+    def offset(self):
+        return self._offset
+
+    @Slot(int)
+    def setOffset(self, ms):
+        val = max(-30000, min(30000, int(ms)))
+        uri = (self.player.state.get("uri") or "") if hasattr(self.player, "state") else ""
+        if uri:
+            if val == 0:
+                self._offsets.pop(uri, None)
+            else:
+                self._offsets[uri] = val
+            self._save_offsets()
+        if val != self._offset:
+            self._offset = val
+            self.offsetChanged.emit()
+        self._on_position()
+
+    @Slot(int)
+    def adjustOffset(self, delta_ms):
+        self.setOffset(self._offset + int(delta_ms))
+
+    @Slot()
+    def resetOffset(self):
+        self.setOffset(0)
 
     @Property("QVariantList", notify=changed)
     def lines(self):
@@ -613,6 +659,10 @@ class Lyrics(QObject):
     def _on_track(self):
         st = self.player.state
         uri = st.get("uri", "")
+        new_offset = int(self._offsets.get(uri, 0)) if uri else 0
+        if new_offset != self._offset:
+            self._offset = new_offset
+            self.offsetChanged.emit()
         key = (uri, self._source)
         if key == self._key and self._status == "loading":
             return  # already being looked up
@@ -654,7 +704,7 @@ class Lyrics(QObject):
     def _on_position(self):
         if not self._synced:
             return
-        idx = bisect.bisect_right(self._times, self.player.position + 250) - 1
+        idx = bisect.bisect_right(self._times, self.player.position + self._offset + 250) - 1
         if idx != self._current:
             self._current = idx
             self.currentChanged.emit()

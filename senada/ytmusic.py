@@ -437,6 +437,39 @@ def search(query: str) -> dict:
     return out
 
 
+def suggestions(query: str) -> list[str]:
+    """Autocomplete suggestions from YouTube Music for a partial search query."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    resp = _post("music/get_search_suggestions", {"input": q}, timeout=6)
+    seen: set[str] = set()
+    out: list[str] = []
+    for section in resp.get("contents") or []:
+        sec = (section or {}).get("searchSuggestionsSectionRenderer") or {}
+        for item in sec.get("contents") or []:
+            if not isinstance(item, dict):
+                continue
+            cand = ""
+            for key in ("searchSuggestionRenderer", "historySuggestionRenderer"):
+                sr = item.get(key)
+                if isinstance(sr, dict):
+                    cand = (_get(sr, "navigationEndpoint", "searchEndpoint", "query")
+                            or _text(sr.get("suggestion"))).strip()
+                    break
+            if not cand:
+                ml = item.get("musicResponsiveListItemRenderer")
+                if isinstance(ml, dict):
+                    cand = (_get(ml, "navigationEndpoint", "searchEndpoint", "query")
+                            or _text(_get(ml, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer", "text"))).strip()
+            if cand and cand.lower() not in seen:
+                seen.add(cand.lower())
+                out.append(cand)
+                if len(out) >= 8:
+                    return out
+    return out
+
+
 def _responsive_header(resp: dict) -> dict:
     sl = _section_list(resp)
     for s in sl.get("contents") or []:

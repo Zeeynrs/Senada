@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts
 
 // Everything kept on this device: liked songs, own playlists, saved albums/playlists/artists.
@@ -45,6 +46,15 @@ Item {
                 }
                 NButton { text: I18n.t("New playlist"); iconName: "queue-add"; primary: true; onClicked: Nav.newPlaylist([]) }
                 NButton { text: I18n.t("Import playlist"); iconName: "download"; onClicked: importBox.visible = !importBox.visible }
+                NButton { text: I18n.t("Import M3U"); iconName: "list"; onClicked: m3uOpenDialog.open() }
+            }
+
+            Dialogs.FileDialog {
+                id: m3uOpenDialog
+                title: I18n.t("Import M3U playlist")
+                fileMode: Dialogs.FileDialog.OpenFile
+                nameFilters: [I18n.t("M3U playlists") + " (*.m3u *.m3u8)"]
+                onAccepted: library.importM3u(selectedFile)
             }
 
             // inline import (Spotify or YouTube Music link)

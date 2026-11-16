@@ -95,9 +95,17 @@ def save_cover(data: bytes) -> str:
     return QUrl.fromLocalFile(str(path)).toString()
 
 
+def _tag_int(tags, key: str) -> int:
+    raw = _first(tags, key).split("/", 1)[0].strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
 def read_track(path: Path) -> dict:
     """A track dict for one audio file."""
-    title, artist, album, duration, cover = "", "", "", 0, ""
+    title, artist, album, duration, cover, track_no, disc_no = "", "", "", 0, "", 0, 0
     if mutagen is not None:
         try:
             easy = mutagen.File(str(path), easy=True)
@@ -106,6 +114,8 @@ def read_track(path: Path) -> dict:
                 artist = _first(easy.tags, "artist", "albumartist")
                 album = _first(easy.tags, "album")
                 duration = int((getattr(easy.info, "length", 0) or 0) * 1000)
+                track_no = _tag_int(easy.tags, "tracknumber")
+                disc_no = _tag_int(easy.tags, "discnumber")
             cover = save_cover(_cover_bytes(mutagen.File(str(path))))
         except Exception as e:  # unreadable tags: the file name still names it
             logger.debug("tags of %s not read: %s", path, e)
@@ -115,7 +125,8 @@ def read_track(path: Path) -> dict:
         artist = artist or (m.group("artist").strip() if m else "")
     return {"uri": PREFIX + str(path), "id": "", "name": title, "artists": artist or tr("Unknown artist"),
             "album": album or path.parent.name, "durationMs": duration, "explicit": False,
-            "imageSmall": cover, "image": cover, "imageLarge": cover, "local": True}
+            "imageSmall": cover, "image": cover, "imageLarge": cover, "local": True,
+            "trackNo": track_no, "discNo": disc_no}
 
 
 def scan(folders: list[str], old: dict) -> dict:
@@ -142,7 +153,84 @@ def scan(folders: list[str], old: dict) -> dict:
 
 
 def sort_key(track: dict):
-    return (track.get("artists", "").lower(), track.get("album", "").lower(), track.get("name", "").lower())
+    return (track.get("artists", "").lower(), track.get("album", "").lower(),
+            int(track.get("discNo") or 0), int(track.get("trackNo") or 0), track.get("name", "").lower())
+
+
+def _sylt_lines(entries) -> list[dict]:
+    """Convert mutagen SYLT [(text, timestamp_ms), ...] into sorted synced lyric lines."""
+    items = [(str(txt or ""), int(ts or 0)) for txt, ts in (entries or [])]
+    if not items:
+        return []
+    has_newlines = any("\n" in txt or "\r" in txt for txt, _ in items)
+    if not has_newlines:
+        return sorted(
+            [{"t": ts, "text": txt.strip()} for txt, ts in items if txt.strip()],
+            key=lambda l: l["t"],
+        )
+    lines = []
+    buf = []
+    line_t = None
+    for txt, ts in items:
+        parts = txt.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        for idx, part in enumerate(parts):
+            if line_t is None and part:
+                line_t = ts
+            buf.append(part)
+            if idx < len(parts) - 1:
+                joined = "".join(buf).strip()
+                if joined:
+                    lines.append({"t": line_t if line_t is not None else ts, "text": joined})
+                buf.clear()
+                line_t = None
+    tail = "".join(buf).strip()
+    if tail:
+        lines.append({"t": line_t if line_t is not None else items[-1][1], "text": tail})
+    return sorted(lines, key=lambda l: l["t"])
+
+
+def _embedded_lyrics(path: str) -> dict | None:
+    """Read embedded USLT / SYLT / MP4 / Vorbis lyrics from an audio file via mutagen."""
+    if mutagen is None:
+        return None
+    try:
+        tags = getattr(mutagen.File(str(path)), "tags", None)
+    except Exception:
+        return None
+    if not tags:
+        return None
+    from .lyrics import _plain, parse_lrc
+
+    if hasattr(tags, "getall"):
+        for sylt in tags.getall("SYLT"):
+            lines = _sylt_lines(getattr(sylt, "text", None))
+            if lines:
+                return {"synced": True, "lines": lines, "source": "file"}
+        for uslt in tags.getall("USLT"):
+            raw = str(getattr(uslt, "text", "") or "").strip()
+            if raw:
+                lines = parse_lrc(raw)
+                data = {"synced": True, "lines": lines} if lines else _plain(raw)
+                if data["lines"]:
+                    return {**data, "source": "file"}
+
+    raw_text = ""
+    if hasattr(tags, "get") and "\xa9lyr" in tags:
+        val = tags.get("\xa9lyr")
+        raw_text = str(val[0] if isinstance(val, list) and val else val or "").strip()
+    if not raw_text and hasattr(tags, "keys"):
+        by_upper = {str(k).upper(): tags[k] for k in tags.keys()}
+        for key in ("SYNCEDLYRICS", "LYRICS", "UNSYNCEDLYRICS"):
+            val = by_upper.get(key)
+            if val:
+                raw_text = str(val[0] if isinstance(val, list) else val or "").strip()
+                if raw_text:
+                    break
+    if not raw_text:
+        return None
+    lines = parse_lrc(raw_text)
+    data = {"synced": True, "lines": lines} if lines else _plain(raw_text)
+    return {**data, "source": "file"} if data["lines"] else None
 
 
 class LocalFiles(QObject):
@@ -169,7 +257,7 @@ class LocalFiles(QObject):
         return path if path and os.path.isfile(path) else None
 
     def lyrics_for(self, uri: str) -> dict | None:
-        """An .lrc file next to the song: {"synced", "lines", "source"}."""
+        """An .lrc file next to the song, or embedded lyrics tags: {"synced", "lines", "source"}."""
         path = path_of(uri)
         if not path:
             return None
@@ -177,11 +265,11 @@ class LocalFiles(QObject):
         try:
             text = lrc.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
-            return None
+            return _embedded_lyrics(path)
         from .lyrics import _plain, parse_lrc
         lines = parse_lrc(text)
         data = {"synced": True, "lines": lines} if lines else _plain(text)
-        return {**data, "source": "file"} if data["lines"] else None
+        return {**data, "source": "file"} if data["lines"] else _embedded_lyrics(path)
 
     def page(self) -> dict:
         tracks = self.tracks()
@@ -198,6 +286,51 @@ class LocalFiles(QObject):
                 "imageLarge": cover.get("imageLarge", ""), "typeLabel": tr("On this computer"),
                 "subtitle": trn("{n} song", "{n} songs", len(tracks)), "tracks": tracks,
                 "playUri": "senada:local:", "note": note, "local": True}
+
+    @Slot(str, result="QVariantList")
+    def groups(self, by: str):
+        tracks = self.tracks()
+        buckets: dict[str, list[dict]] = {}
+        labels: dict[str, tuple[str, str]] = {}
+        for t in tracks:
+            if by == "albums":
+                alb = t.get("album") or tr("Unknown album")
+                art = t.get("artists") or tr("Unknown artist")
+                key = f"{alb.lower()}::{art.lower()}"
+                labels[key] = (alb, art)
+            elif by == "artists":
+                art = t.get("artists") or tr("Unknown artist")
+                key = art.lower()
+                labels[key] = (art, "")
+            elif by == "folders":
+                p = path_of(t.get("uri", ""))
+                parent = str(Path(p).parent) if p else ""
+                name = Path(p).parent.name or parent if p else tr("Unknown folder")
+                key = parent
+                labels[key] = (name, parent)
+            else:
+                return []
+            buckets.setdefault(key, []).append(t)
+
+        out = []
+        for key, items in buckets.items():
+            title, sub = labels[key]
+            if by == "albums":
+                items.sort(key=lambda x: (int(x.get("discNo") or 0), int(x.get("trackNo") or 0), x.get("name", "").lower()))
+            else:
+                items.sort(key=sort_key)
+            cover = next((x.get("imageSmall", "") for x in items if x.get("imageSmall")), "")
+            count_txt = trn("{n} song", "{n} songs", len(items))
+            out.append({
+                "key": key,
+                "name": title,
+                "subtitle": f"{sub} · {count_txt}" if sub and sub != title else count_txt,
+                "count": len(items),
+                "imageSmall": cover,
+                "tracks": items,
+            })
+        out.sort(key=lambda g: g["name"].lower())
+        return out
 
     # ---- QML ---------------------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ Item {
     property string period: "month"   // week | month | year | all
     property var info: stats.summary(period)
     readonly property int maxBar: Math.max(1, ...(info.bars || []).map(b => b.minutes))
+    readonly property int maxHour: Math.max(1, ...(info.byHour || []).map(h => h.minutes || 0))
 
     function refresh() { info = stats.summary(period) }
     onPeriodChanged: refresh()
@@ -21,6 +22,15 @@ Item {
     function minutesText(m) {
         return m >= 120 ? I18n.t("{n} h", { n: Math.round(m / 60) }) : I18n.t("{n} min", { n: m })
     }
+    function hourLabel(h) {
+        return (h < 10 ? "0" : "") + h + ":00"
+    }
+    function formatPlayedAt(sec) {
+        if (!sec) return ""
+        return Qt.formatDateTime(new Date(sec * 1000), "dd MMM HH:mm")
+    }
+
+    ShareStatsDialog { id: shareStatsDialog }
 
     // one big number with its label
     component Tile: Rectangle {
@@ -62,7 +72,20 @@ Item {
             Column {
                 width: parent.width
                 spacing: 12
-                Label { text: I18n.t("Your stats"); font.pixelSize: 34; font.weight: Font.Black; font.letterSpacing: -0.6 }
+                RowLayout {
+                    width: parent.width
+                    Label {
+                        Layout.fillWidth: true
+                        text: I18n.t("Your stats")
+                        font.pixelSize: 34; font.weight: Font.Black; font.letterSpacing: -0.6
+                    }
+                    NButton {
+                        iconName: "share"
+                        text: I18n.t("Share stats")
+                        enabled: (page.info.plays || 0) > 0
+                        onClicked: shareStatsDialog.openWith(page.info, page.period)
+                    }
+                }
                 Label {
                     width: parent.width
                     text: page.info.since
@@ -96,6 +119,14 @@ Item {
                 Tile { value: String(page.info.plays || 0); label: I18n.t("plays") }
                 Tile { value: String(page.info.songs || 0); label: I18n.t("different songs") }
                 Tile { value: String(page.info.artists || 0); label: I18n.t("artists") }
+                Tile {
+                    value: (page.info.streakDays || 0) > 0
+                           ? I18n.n("{n} day", "{n} days", page.info.streakDays || 0)
+                           : "0"
+                    label: (page.info.longestStreak || 0) > (page.info.streakDays || 0)
+                           ? I18n.t("streak · best {n}d", { n: page.info.longestStreak || 0 })
+                           : I18n.t("daily streak")
+                }
             }
 
             // ---- minutes per day / month ---------------------------------------------------
@@ -145,6 +176,61 @@ Item {
                                 HoverHandler { id: barHover }
                                 ToolTip.visible: barHover.hovered
                                 ToolTip.text: modelData.key + "  ·  " + page.minutesText(modelData.minutes)
+                                ToolTip.delay: 200
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- listening by hour of day --------------------------------------------------
+            Column {
+                width: parent.width
+                spacing: 10
+                Label {
+                    text: I18n.t("Listening by hour")
+                    font.pixelSize: 18
+                    font.weight: Font.Bold
+                }
+                Item {
+                    width: parent.width
+                    height: 120
+                    Row {
+                        id: hourRow
+                        anchors.fill: parent
+                        anchors.bottomMargin: 20
+                        spacing: 4
+                        readonly property int count: Math.max(1, (page.info.byHour || []).length)
+                        Repeater {
+                            model: page.info.byHour || []
+                            delegate: Item {
+                                id: hbar
+                                required property var modelData
+                                width: (hourRow.width - hourRow.spacing * (hourRow.count - 1)) / hourRow.count
+                                height: hourRow.height
+                                Rectangle {
+                                    anchors.bottom: parent.bottom
+                                    width: parent.width
+                                    radius: Math.min(4, width / 2)
+                                    height: modelData.minutes > 0 ? Math.max(3, parent.height * modelData.minutes / page.maxHour) : 2
+                                    color: modelData.minutes > 0 ? (hbarHover.hovered ? Theme.primary : Theme.alpha(Theme.primary, 0.7))
+                                                                 : Theme.line
+                                    Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                }
+                                Label {
+                                    anchors.top: parent.bottom
+                                    anchors.topMargin: 4
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    visible: modelData.hour % 6 === 0 || modelData.hour === 23
+                                    text: (modelData.hour < 10 ? "0" : "") + modelData.hour
+                                    color: Theme.faint
+                                    font.pixelSize: 10
+                                }
+                                HoverHandler { id: hbarHover }
+                                ToolTip.visible: hbarHover.hovered
+                                ToolTip.text: page.hourLabel(modelData.hour) + "  ·  "
+                                              + page.minutesText(modelData.minutes || 0)
+                                              + " (" + I18n.n("{n} play", "{n} plays", modelData.plays || 0) + ")"
                                 ToolTip.delay: 200
                             }
                         }
@@ -262,6 +348,117 @@ Item {
                                         color: Theme.dim
                                         font.pixelSize: 12
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- top albums and recent plays -----------------------------------------------
+            RowLayout {
+                width: parent.width
+                spacing: 28
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 2
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 4
+                    Label { text: I18n.t("Top albums"); font.pixelSize: 18; font.weight: Font.Bold; Layout.bottomMargin: 6 }
+                    Label {
+                        visible: (page.info.topAlbums || []).length === 0
+                        text: I18n.t("Nothing yet in this period.")
+                        color: Theme.dim
+                    }
+                    Repeater {
+                        model: page.info.topAlbums || []
+                        delegate: ItemDelegate {
+                            id: albumRow
+                            required property var modelData
+                            required property int index
+                            Layout.fillWidth: true
+                            implicitHeight: 58
+                            padding: 8
+                            background: Rectangle { radius: 10; color: albumRow.hovered ? Theme.hover : "transparent" }
+                            onClicked: if (albumRow.modelData.artists) Nav.findArtist(albumRow.modelData.artists.split(",")[0].trim())
+                            contentItem: RowLayout {
+                                spacing: 12
+                                Label {
+                                    Layout.preferredWidth: 22
+                                    text: String(albumRow.index + 1)
+                                    color: Theme.faint
+                                    font.pixelSize: 14
+                                    font.weight: Font.Bold
+                                    horizontalAlignment: Text.AlignRight
+                                }
+                                Cover {
+                                    Layout.preferredWidth: 42
+                                    Layout.preferredHeight: 42
+                                    radius: 6
+                                    source: albumRow.modelData.imageSmall || ""
+                                    fallbackIcon: "album"
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    Label { Layout.fillWidth: true; text: albumRow.modelData.name || ""; font.pixelSize: 14; elide: Text.ElideRight }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: (albumRow.modelData.artists ? albumRow.modelData.artists + "  ·  " : "")
+                                              + I18n.n("{n} play", "{n} plays", albumRow.modelData.plays || 0)
+                                        color: Theme.dim
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 3
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 4
+                    Label { text: I18n.t("Recent plays"); font.pixelSize: 18; font.weight: Font.Bold; Layout.bottomMargin: 6 }
+                    Label {
+                        visible: (page.info.recentPlays || []).length === 0
+                        text: I18n.t("Nothing yet in this period.")
+                        color: Theme.dim
+                    }
+                    Repeater {
+                        model: page.info.recentPlays || []
+                        delegate: ItemDelegate {
+                            id: recentRow
+                            required property var modelData
+                            required property int index
+                            Layout.fillWidth: true
+                            implicitHeight: 54
+                            padding: 8
+                            background: Rectangle { radius: 10; color: recentRow.hovered ? Theme.hover : "transparent" }
+                            onClicked: stats.play(page.info.recentPlays, recentRow.index)
+                            contentItem: RowLayout {
+                                spacing: 12
+                                Cover {
+                                    Layout.preferredWidth: 38
+                                    Layout.preferredHeight: 38
+                                    radius: 6
+                                    source: recentRow.modelData.imageSmall || ""
+                                    fallbackIcon: "music"
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    Label { Layout.fillWidth: true; text: recentRow.modelData.name || ""; font.pixelSize: 14; elide: Text.ElideRight }
+                                    Label { Layout.fillWidth: true; text: recentRow.modelData.artists || ""; color: Theme.dim; font.pixelSize: 12; elide: Text.ElideRight }
+                                }
+                                Label {
+                                    text: page.formatPlayedAt(recentRow.modelData.at)
+                                    color: Theme.dim
+                                    font.pixelSize: 12
+                                    font.features: { "tnum": 1 }
                                 }
                             }
                         }

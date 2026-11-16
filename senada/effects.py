@@ -23,7 +23,7 @@ MAX_DB = 12
 TEMPO_MIN, TEMPO_MAX = 0.5, 2.0
 # flat by default: the sound is left as it is until the user changes it
 DEFAULTS = {"enabled": True, "preset": "Flat", "bands": PRESETS["Flat"], "tempo": 1.0, "keepPitch": False,
-            "normalize": False, "skipSilence": False, "crossfade": 0}
+            "normalize": False, "skipSilence": False, "crossfade": 0, "customPresets": {}}
 CROSSFADE_MAX = 12  # seconds (see crossfade.py)
 
 
@@ -37,6 +37,7 @@ def gains_db(state: dict) -> list[float] | None:
 
 class AudioEffects(QObject):
     changed = Signal()
+    presetsChanged = Signal()
 
     def __init__(self, settings, engine=None, parent=None):
         super().__init__(parent)
@@ -47,6 +48,7 @@ class AudioEffects(QObject):
         bands = self._state["bands"]
         if not isinstance(bands, list) or len(bands) != len(BANDS):
             self._state["bands"] = list(DEFAULTS["bands"])
+        self._state["customPresets"] = self._custom_presets()
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.setInterval(600)
@@ -81,9 +83,18 @@ class AudioEffects(QObject):
     def bandLabels(self):
         return list(BANDS)
 
-    @Property("QVariantList", constant=True)
+    @Property("QVariantList", notify=presetsChanged)
     def presetNames(self):
-        return list(PRESETS)
+        custom = sorted(k for k in self._custom_presets() if k not in PRESETS)
+        return list(PRESETS) + custom
+
+    def _custom_presets(self) -> dict[str, list[float]]:
+        raw = self._state.get("customPresets")
+        if not isinstance(raw, dict):
+            return {}
+        return {k: [float(v) for v in vals[:len(BANDS)]]
+                for k, vals in raw.items()
+                if isinstance(k, str) and isinstance(vals, list) and len(vals) == len(BANDS)}
 
     @Property(bool, notify=changed)
     def enabled(self):
@@ -119,14 +130,48 @@ class AudioEffects(QObject):
 
     @Slot(str)
     def usePreset(self, name):
+        custom = self._custom_presets()
         if name in PRESETS:
             self._update(preset=name, bands=list(PRESETS[name]))
+        elif name in custom:
+            self._update(preset=name, bands=list(custom[name]))
 
     @Slot()
     def nextPreset(self):
-        names = list(PRESETS)
+        names = list(self.presetNames)
         i = (names.index(self._state["preset"]) + 1) % len(names) if self._state["preset"] in names else 0
         self.usePreset(names[i])
+
+    @Slot(str, result=bool)
+    def isCustomPreset(self, name):
+        return name in self._custom_presets() and name not in PRESETS
+
+    @Slot(str, result=bool)
+    def savePreset(self, name):
+        clean = str(name or "").strip()
+        if not clean or clean in PRESETS or clean == "Custom":
+            return False
+        custom = self._custom_presets()
+        custom[clean] = [round(float(v), 2) for v in self._state["bands"]]
+        self._update(customPresets=custom, preset=clean)
+        self._save_timer.stop()
+        self._save()
+        self.presetsChanged.emit()
+        return True
+
+    @Slot(str)
+    def deletePreset(self, name):
+        custom = self._custom_presets()
+        if name not in custom:
+            return
+        custom.pop(name, None)
+        patch = {"customPresets": custom}
+        if self._state.get("preset") == name:
+            patch["preset"] = "Custom"
+        self._update(**patch)
+        self._save_timer.stop()
+        self._save()
+        self.presetsChanged.emit()
 
     @Slot(float)
     def setTempo(self, value):

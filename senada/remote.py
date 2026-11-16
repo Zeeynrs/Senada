@@ -20,32 +20,41 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PySide6.QtCore import Property, QObject, Qt, Signal, Slot
 
+from . import qrcode
 from .i18n import tr
 from .remote_page import PAGE
 
 try:
     import segno
-except ImportError:  # no QR code: the link is still shown
+except ImportError:  # falls back to senada.qrcode
     segno = None
 
 logger = logging.getLogger("senada.remote")
 
 PORT = 8765
 PORTS_TRIED = 10
-COMMANDS = ("toggle", "next", "previous", "seek", "volume", "shuffle", "repeat", "like")
+COMMANDS = ("toggle", "next", "previous", "seek", "volume", "shuffle", "repeat", "like",
+            "skip", "play_queue", "remove_queue", "clear_queue", "autoplay")
 
 
 def lan_address() -> str:
     """This computer's address on the local network (no packet is sent)."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("10.255.255.255", 1))
-            return s.getsockname()[0]
-    except OSError:
+    for target in ("10.255.255.255", "192.168.255.255", "172.31.255.255", "1.1.1.1"):
         try:
-            return socket.gethostbyname(socket.gethostname())
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect((target, 1))
+                ip = s.getsockname()[0]
+                if ip and not ip.startswith("127."):
+                    return ip
         except OSError:
-            return "127.0.0.1"
+            continue
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip:
+            return ip
+    except OSError:
+        pass
+    return "127.0.0.1"
 
 
 def page_html() -> bytes:
@@ -90,6 +99,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, page_html(), "text/html; charset=utf-8")
         elif route == "/api/state":
             self._send(200, json.dumps(self.remote.state()).encode())
+        elif route == "/api/queue":
+            self._send(200, json.dumps(self.remote.queue_state()).encode())
+        elif route == "/api/lyrics":
+            self._send(200, json.dumps(self.remote.lyrics_state()).encode())
         else:
             self._send(404, b"{}")
 
@@ -116,18 +129,32 @@ class Remote(QObject):
     toast = Signal(str)
     command = Signal(str, object)   # from the server thread, handled on the Qt thread
 
-    def __init__(self, player, settings, parent=None):
+    def __init__(self, player, settings, lyrics=None, parent=None):
         super().__init__(parent)
         self.player = player
         self.settings = settings
+        self.lyrics = lyrics
         self._server = None
         self._port = 0
         self._lock = threading.Lock()
         self._snap = {}
+        self._queue_snap = {"current": {}, "queue": [], "autoplay": False}
+        self._lyrics_snap = {"status": "idle", "synced": False, "current": -1, "offset": 0, "lines": []}
         self.command.connect(self._on_command, Qt.ConnectionType.QueuedConnection)
         player.stateChanged.connect(self._refresh)
         player.positionChanged.connect(self._refresh)
+        if hasattr(player, "queueChanged"):
+            player.queueChanged.connect(self._refresh_queue)
+        if hasattr(player, "autoplayChanged"):
+            player.autoplayChanged.connect(self._refresh_queue)
+        if lyrics is not None:
+            lyrics.changed.connect(self._refresh_lyrics)
+            lyrics.currentChanged.connect(self._refresh_lyrics)
+            if hasattr(lyrics, "offsetChanged"):
+                lyrics.offsetChanged.connect(self._refresh_lyrics)
         self._refresh()
+        self._refresh_queue()
+        self._refresh_lyrics()
         if self.settings["remote"]:
             self._start()
 
@@ -145,10 +172,66 @@ class Remote(QObject):
         with self._lock:
             return dict(self._snap)
 
+    def queue_state(self) -> dict:
+        with self._lock:
+            return dict(self._queue_snap)
+
+    def lyrics_state(self) -> dict:
+        with self._lock:
+            return dict(self._lyrics_snap)
+
     def _refresh(self):
         snap = snapshot(self.player.state, self.player.position)
+        snap["autoplay"] = bool(getattr(self.player, "autoplay", False))
         with self._lock:
             self._snap = snap
+        self._refresh_queue()
+
+    def _refresh_queue(self):
+        st = self.player.state or {}
+        upcoming = getattr(self.player, "queue", None) or []
+        q_snap = {
+            "current": {
+                "uri": st.get("uri", ""),
+                "name": st.get("name", ""),
+                "artists": st.get("artists", ""),
+                "hasTrack": bool(st.get("hasTrack")),
+            },
+            "queue": [
+                {
+                    "index": i,
+                    "uri": t.get("uri", ""),
+                    "name": t.get("name", ""),
+                    "artists": t.get("artists", ""),
+                    "durationMs": int(t.get("durationMs") or 0),
+                }
+                for i, t in enumerate(upcoming) if isinstance(t, dict)
+            ],
+            "autoplay": bool(getattr(self.player, "autoplay", False)),
+            "shuffle": bool(st.get("shuffle")),
+            "repeat": st.get("repeat", "off"),
+        }
+        with self._lock:
+            self._queue_snap = q_snap
+
+    def _refresh_lyrics(self):
+        lyr = self.lyrics
+        if lyr is None:
+            data = {"status": "none", "synced": False, "current": -1, "offset": 0, "lines": []}
+        else:
+            lines = getattr(lyr, "lines", None) or []
+            data = {
+                "status": getattr(lyr, "status", "idle"),
+                "synced": bool(getattr(lyr, "synced", False)),
+                "current": int(getattr(lyr, "current", -1)),
+                "offset": int(getattr(lyr, "offset", 0)),
+                "lines": [
+                    {"t": int(l.get("t") or 0), "text": str(l.get("text") or ""), "sub": str(l.get("sub") or "")}
+                    for l in lines if isinstance(l, dict)
+                ],
+            }
+        with self._lock:
+            self._lyrics_snap = data
 
     def _on_command(self, cmd, value):
         p = self.player
@@ -168,6 +251,16 @@ class Remote(QObject):
             p.cycleRepeat()
         elif cmd == "like":
             p.toggleLike()
+        elif cmd == "skip" and isinstance(value, (int, float)) and hasattr(p, "skip"):
+            p.skip(max(1, int(value)))
+        elif cmd == "play_queue" and isinstance(value, (int, float)) and int(value) >= 0 and hasattr(p, "skip"):
+            p.skip(int(value) + 1)
+        elif cmd == "remove_queue" and isinstance(value, (int, float)) and hasattr(p, "removeFromQueue"):
+            p.removeFromQueue(int(value))
+        elif cmd == "clear_queue" and hasattr(p, "clearQueue"):
+            p.clearQueue()
+        elif cmd == "autoplay" and hasattr(p, "setAutoplay"):
+            p.setAutoplay(bool(value) if isinstance(value, bool) else not getattr(p, "autoplay", False))
 
     # ---- the server ---------------------------------------------------------------------------
 
@@ -223,10 +316,21 @@ class Remote(QObject):
 
     @Property(str, notify=changed)
     def qr(self):
-        """The link as a QR code (an SVG data URI for an Image), or "" without segno."""
-        if not self._port or segno is None:
+        """The link as a QR code (an SVG data URI for an Image)."""
+        if not self._port:
             return ""
-        return segno.make(self.url, error="m").svg_data_uri(scale=6, border=2, dark="#000000", light="#ffffff")
+        url = self.url
+        if segno is not None:
+            return segno.make(url, error="m").svg_data_uri(scale=6, border=2, dark="#000000", light="#ffffff")
+        try:
+            return qrcode.svg_data_uri(url, scale=6, border=2, dark="#000000", light="#ffffff")
+        except ValueError:
+            return ""
+
+    @Slot()
+    def refresh(self):
+        """Re-evaluate the active LAN address and QR code (e.g. after switching Wi-Fi)."""
+        self.changed.emit()
 
     @Slot()
     def newLink(self):

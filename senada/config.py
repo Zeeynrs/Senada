@@ -29,6 +29,7 @@ else:
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LIBRARY_FILE = CONFIG_DIR / "library.json"
+PLAYBACK_FILE = CONFIG_DIR / "playback.json"
 AUDIO_CACHE = CACHE_DIR / "audio"
 # songs downloaded to play without internet: in the user's Music folder, easy to find and back up
 DOWNLOADS_DIR = Path(os.environ.get("SENADA_DOWNLOADS") or Path.home() / "Music" / "Senada")
@@ -57,6 +58,18 @@ LASTFM_API_SECRET = (os.environ.get("SENADA_LASTFM_API_SECRET") or _build_key("L
 # never written to a backup file (see Settings.snapshot)
 PRIVATE_SETTINGS = ("scrobble_session", "remote_key")
 
+AUDIO_FORMATS = {
+    "best": "bestaudio[ext=m4a]/bestaudio/best",
+    "auto": "bestaudio[ext=m4a]/bestaudio/best",
+    "high": "bestaudio[abr<=160]/bestaudio/best",
+    "medium": "bestaudio[abr<=128]/bestaudio/best",
+}
+
+
+def format_for_quality(quality: str) -> str:
+    return AUDIO_FORMATS.get(str(quality or "best").lower(), AUDIO_FORMATS["best"])
+
+
 DEFAULTS = {
     "language": "en",  # "en" or "id" (see i18n.py)
     "display_name": "",
@@ -75,6 +88,8 @@ DEFAULTS = {
     "player_bar": "docked",  # "docked" along the bottom, or "floating" (a rounded card above it)
     "island_dock": 10,  # seconds before it tucks into the top edge of the screen (5 - 15), 0: never
     "audio_quality": "best",  # 'best', 'high', 'medium'
+    "audio_device": "auto",  # mpv audio-device name ("auto" = system default)
+    "autoplay": False,  # queue similar tracks automatically when the queue ends
     "cache_audio": True,
     "lyrics_source": "auto",  # "auto", "lrclib", "ytmusic", "netease" (see lyrics.py)
     # how lyrics look (see session.py LYRICS_LOOK): size, font, alignment, how the sung line stands out
@@ -125,6 +140,9 @@ class Settings:
 
     def __getitem__(self, key):
         return self._data.get(key, DEFAULTS.get(key))
+
+    def get(self, key, default=None):
+        return self._data.get(key, DEFAULTS.get(key, default))
 
     def snapshot(self) -> dict:
         """The settings as saved (for a backup)."""

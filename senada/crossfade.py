@@ -32,6 +32,8 @@ class CrossfadeEngine(QObject):
     trackEnded = Signal()
     loadFailed = Signal()
     errorOccurred = Signal(str)
+    audioDevicesChanged = Signal(list)
+    audioDeviceChanged = Signal(str)
 
     def __init__(self, make_engine=None, parent=None):
         super().__init__(parent)
@@ -51,6 +53,11 @@ class CrossfadeEngine(QObject):
         for name in ("positionChanged", "durationChanged", "stateChanged", "trackEnded", "loadFailed"):
             getattr(engine, name).connect(lambda *a, e=engine, n=name: self._from(e, n, a))
         engine.errorOccurred.connect(self.errorOccurred)
+        if not getattr(self, "_engines", None):
+            if hasattr(engine, "audioDevicesChanged"):
+                engine.audioDevicesChanged.connect(self.audioDevicesChanged)
+            if hasattr(engine, "audioDeviceChanged"):
+                engine.audioDeviceChanged.connect(self.audioDeviceChanged)
         return engine
 
     def _from(self, engine, name, args):
@@ -200,3 +207,20 @@ class CrossfadeEngine(QObject):
 
     def set_position_step(self, ms):
         self._broadcast("set_position_step", ms)
+
+    def audio_devices(self):
+        return self._engines[0].audio_devices() if hasattr(self._engines[0], "audio_devices") else []
+
+    def audio_device(self):
+        return self._engines[0].audio_device() if hasattr(self._engines[0], "audio_device") else "auto"
+
+    def set_audio_device(self, device_id):
+        self._broadcast("set_audio_device", device_id)
+
+    def probe_audio_devices(self):
+        if hasattr(self._engines[0], "probe_audio_devices"):
+            return self._engines[0].probe_audio_devices()
+        return []
+
+    def set_quality(self, quality):
+        self._broadcast("set_quality", quality)

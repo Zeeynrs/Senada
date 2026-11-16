@@ -154,7 +154,7 @@ echo ""
 
 install_system_deps() {
     if is_arch; then
-        local deps=(pyside6 mpv python-dbus python-mutagen cava)
+        local deps=(pyside6 mpv python-dbus python-mutagen python-segno cava)
         if ! command -v yt-dlp &>/dev/null && [ ! -x "$BIN_DIR/yt-dlp" ]; then
             deps+=(yt-dlp)
         fi

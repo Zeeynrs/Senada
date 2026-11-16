@@ -1,14 +1,17 @@
 """Playback state and controls using local AudioEngine and AudioResolver."""
 
 import colorsys
+import json
 import logging
 import random
 import time
+from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QImage
 
 from . import net, ytmusic
+from .config import PLAYBACK_FILE, read_json, write_private
 from .i18n import tr
 from .engine import AudioEngine
 from .resolver import AudioResolver
@@ -65,6 +68,7 @@ class Player(QObject):
     likedChanged = Signal(str, bool)
     historyChanged = Signal()
     trackMatched = Signal(str, "QVariantMap")  # uri, {imageSmall, image, imageLarge, matchScore}
+    autoplayChanged = Signal()
 
     def __init__(self, worker, engine: AudioEngine, resolver: AudioResolver, settings, store, catalog,
                  downloads=None, parent=None):
@@ -75,8 +79,9 @@ class Player(QObject):
         self.worker = worker
         self.engine = engine
         self.resolver = resolver
-        self.streams = StreamResolver()
         self.settings = settings
+        self.streams = StreamResolver(quality=self._setting("audio_quality", "best"))
+        self._audio_device = str(self._setting("audio_device", "auto") or "auto")
 
         self._state = {
             "hasTrack": False,
@@ -85,7 +90,7 @@ class Player(QObject):
             "repeat": "off",  # 'off', 'context', 'track'
             "volume": 80,
             "supportsVolume": True,
-            "deviceId": "local",
+            "deviceId": self._audio_device,
             "deviceName": "Senada (Lokal)",
             "deviceType": "computer",
             "contextUri": "",
@@ -96,6 +101,7 @@ class Player(QObject):
         self._position = 0
         self._queue = []
         self._queue_index = -1
+        self._unshuffled = None  # original upcoming order kept while shuffle is on
         self._track_cache = {}  # uri -> track_dict
         self._play_token = 0  # bumps on every track change; stale stream lookups are dropped
         self._prefetched = ""  # uri already being resolved ahead of time
@@ -104,6 +110,10 @@ class Player(QObject):
         self._recovering = -1  # play token for which another upload is being (or was) tried
         self._fail_streak = 0  # songs in a row that could not be played
         self._resume_next = False  # stopped by the sleep timer at a song's end: play resumes with the next one
+        self._autoplay_token = -1  # play token for which radio continuation was already fetched
+        self._autoplay_advance_token = -1  # play token waiting on autoplay tracks to advance immediately
+        self._restored_pending = False  # restored from previous session: play starts the track at saved position
+        self._seek_on_start = None  # (play_token, position_ms) applied once playback begins
         self._sleep = SleepTimer(engine, lambda: self._state.get("volume", 80),
                                  lambda: bool(self._state.get("isPlaying")), self)
         self._sleep.changed.connect(self._prefetch_next)  # "after this song" takes the queued song back out
@@ -124,9 +134,17 @@ class Player(QObject):
         self.engine.trackEnded.connect(self._on_track_ended)
         self.engine.loadFailed.connect(self._on_load_failed)
         self.engine.errorOccurred.connect(lambda msg: self.worker.error.emit(msg))
+        if hasattr(self.engine, "audioDevicesChanged"):
+            self.engine.audioDevicesChanged.connect(self._on_audio_devices)
+        if hasattr(self.engine, "audioDeviceChanged"):
+            self.engine.audioDeviceChanged.connect(self._on_audio_device)
 
-        # Initial volume
+        # Apply saved volume, device, and quality settings
         self.engine.set_volume(80)
+        if hasattr(self.engine, "set_audio_device") and self._audio_device != "auto":
+            self.engine.set_audio_device(self._audio_device)
+        if hasattr(self.engine, "set_quality"):
+            self.engine.set_quality(self._setting("audio_quality", "best"))
 
     # ---- properties for QML ---------------------------------------------
 
@@ -157,6 +175,30 @@ class Player(QObject):
     def sleep(self):
         return self._sleep
 
+    def _setting(self, key: str, default=None):
+        try:
+            return self.settings[key]
+        except (KeyError, TypeError):
+            return default
+
+    @Property(bool, notify=autoplayChanged)
+    def autoplay(self):
+        return bool(self._setting("autoplay", False))
+
+    @autoplay.setter
+    def autoplay(self, on):
+        self.setAutoplay(on)
+
+    @Slot(bool)
+    def setAutoplay(self, on):
+        on = bool(on)
+        if on == self.autoplay:
+            return
+        if isinstance(self.settings, dict) or hasattr(self.settings, "__setitem__"):
+            self.settings["autoplay"] = on
+        self.autoplayChanged.emit()
+        self._prefetch_next()
+
     # ---- playback engine callbacks --------------------------------------
 
     def _on_engine_pos(self, pos_ms: int):
@@ -172,6 +214,13 @@ class Player(QObject):
     def _on_engine_state(self, is_playing: bool):
         if is_playing:
             self._fail_streak = 0
+            if self._seek_on_start and self._seek_on_start[0] == self._play_token:
+                _, pos = self._seek_on_start
+                self._seek_on_start = None
+                if pos > 0:
+                    self._position = pos
+                    self.positionChanged.emit()
+                    self.engine.seek(pos)
         if self._state.get("isPlaying") != is_playing:
             self._state["isPlaying"] = is_playing
             self.stateChanged.emit()
@@ -297,10 +346,94 @@ class Player(QObject):
             self._state["isPlaying"] = False
             self.stateChanged.emit()
 
+    def _should_autoplay(self) -> bool:
+        return (self.autoplay
+                and bool(self._queue)
+                and 0 <= self._queue_index == len(self._queue) - 1
+                and self._state.get("repeat", "off") == "off"
+                and not self._sleep.stops_after_track)
+
+    def _radio_for(self, track: dict) -> list[dict]:
+        uri = (track or {}).get("uri", "")
+        if uri.startswith("yt:track:"):
+            return ytmusic.up_next(uri.split(":", 2)[2])
+        query = f"{track.get('artists', '')} {track.get('name', '')}".strip()
+        if not query:
+            return []
+        hits = ytmusic.search(query).get("tracks") or []
+        return ytmusic.up_next(hits[0]["id"]) if hits else []
+
+    def _fetch_autoplay(self, advance: bool = False):
+        token = self._play_token
+        seed = self._current_track()
+        if not seed:
+            if advance:
+                self.stop()
+            return
+        if advance:
+            self._autoplay_advance_token = token
+        if self._autoplay_token == token:
+            return
+        self._autoplay_token = token
+        existing_uris = {t.get("uri") for t in self._queue if t.get("uri")}
+        existing_keys = {(t.get("name", "").lower(), t.get("artists", "").lower()) for t in self._queue}
+
+        def fetch():
+            try:
+                tracks = self._radio_for(seed) or []
+            except ytmusic.YTMusicError:
+                return []
+            fresh = []
+            for t in tracks:
+                uri = t.get("uri")
+                key = (t.get("name", "").lower(), t.get("artists", "").lower())
+                if uri and uri in existing_uris:
+                    continue
+                if key in existing_keys:
+                    continue
+                if uri:
+                    existing_uris.add(uri)
+                existing_keys.add(key)
+                fresh.append(t)
+            return fresh
+
+        def on_done(fresh):
+            if token != self._play_token:
+                return
+            should_advance = self._autoplay_advance_token == token
+            self._autoplay_advance_token = -1
+            if not self.autoplay and not should_advance:
+                return
+            if not fresh:
+                if should_advance:
+                    self.stop()
+                return
+            self.cache_tracks(fresh)
+            self._queue.extend(fresh)
+            if self._unshuffled is not None:
+                self._unshuffled.extend(fresh)
+            self.queueChanged.emit()
+            if should_advance and self._queue_index + 1 < len(self._queue):
+                self._play_index(self._queue_index + 1)
+            else:
+                self._prefetch_next()
+
+        def on_fail(_e):
+            if token == self._play_token and self._autoplay_advance_token == token:
+                self._autoplay_advance_token = -1
+                self.stop()
+
+        self.worker.run(fetch, on_done, on_fail)
+
     def _prefetch_next(self):
         """Look the next track up ahead of time and hand it to the engine for a gapless change.
         Called on every position update, so it must stay cheap when there is nothing to do."""
         track = self._next_track()
+        if track is None and self._should_autoplay():
+            if self._autoplay_token != self._play_token and self._started[0] == self._play_token:
+                self._fetch_autoplay(advance=False)
+            self.engine.queue_next("")
+            return
         uri = (track or {}).get("uri", "")
         if not uri or self._started[0] != self._play_token:  # nothing next, or a track change is under way
             self.engine.queue_next("")
@@ -347,6 +480,12 @@ class Player(QObject):
             if self._queue:
                 self._play_index(max(0, self._queue_index))
             return
+        if self._restored_pending and self._queue:
+            resume_pos = self._position
+            self._restored_pending = False
+            idx = max(0, min(self._queue_index, len(self._queue) - 1))
+            self._play_index(idx, start_position_ms=resume_pos)
+            return
         if self.engine.idle is True and not self._state.get("isPlaying") and self._queue:
             # mpv has nothing loaded (stopped at the end of the queue, or by the sleep timer):
             # pausing would do nothing, so the song starts again (or the next one after the timer)
@@ -363,6 +502,8 @@ class Player(QObject):
             self._play_index(self._queue_index + 1)
         elif self._state.get("repeat") == "context":
             self._play_index(0)
+        elif self.autoplay:
+            self._fetch_autoplay(advance=True)
         else:
             self.engine.stop()
             self._state["isPlaying"] = False
@@ -387,7 +528,8 @@ class Player(QObject):
     def seek(self, ms):
         self._position = max(0, int(ms))
         self.positionChanged.emit()
-        self.engine.seek(self._position)
+        if not self._restored_pending:
+            self.engine.seek(self._position)
 
     @Slot(int)
     def setVolume(self, pct):
@@ -404,29 +546,52 @@ class Player(QObject):
         self.stateChanged.emit()
 
         if new_val and self._queue:
+            self._unshuffled = list(self._queue)
             current = self._queue[self._queue_index] if 0 <= self._queue_index < len(self._queue) else None
             remaining = [t for i, t in enumerate(self._queue) if i != self._queue_index]
             random.shuffle(remaining)
             self._queue = ([current] if current else []) + remaining
-            self._queue_index = 0
+            self._queue_index = 0 if current else -1
             self.queueChanged.emit()
+            self._prefetch_next()
+        elif not new_val and self._unshuffled:
+            current = self._current_track()
+            restored = list(self._unshuffled)
+            self._unshuffled = None
+            if current is not None:
+                cur_idx = next((i for i, t in enumerate(restored) if t is current), -1)
+                if cur_idx < 0:
+                    cur_uri = current.get("uri")
+                    cur_idx = next((i for i, t in enumerate(restored) if cur_uri and t.get("uri") == cur_uri), 0)
+                self._queue = restored
+                self._queue_index = cur_idx
+            else:
+                self._queue = restored
+                self._queue_index = -1
+            self.queueChanged.emit()
+            self._prefetch_next()
 
     @Slot()
     def cycleRepeat(self):
         nxt = {"off": "context", "context": "track", "track": "off"}[self._state.get("repeat", "off")]
         self._state["repeat"] = nxt
         self.stateChanged.emit()
+        self._prefetch_next()
 
     # ---- play contexts & queues -----------------------------------------
 
-    def _play_index(self, index: int):
+    def _play_index(self, index: int, start_position_ms: int = 0):
         if index < 0 or index >= len(self._queue):
             return
+        self._restored_pending = False
         self._resume_next = False
+        self._autoplay_token = -1
+        self._autoplay_advance_token = -1
         self._queue_index = index
         track = self._queue[index]
-        self._position = 0
+        self._position = max(0, int(start_position_ms))
         self._play_token += 1
+        self._seek_on_start = (self._play_token, self._position) if self._position > 0 else None
         token = self._play_token
         self._state = {
             **self._state,
@@ -547,11 +712,12 @@ class Player(QObject):
                 self._track_cache[uri] = t
         return t
 
-    def _start_queue(self, tracks: list, index: int = 0, context_uri: str = ""):
+    def _start_queue(self, tracks: list, index: int = 0, context_uri: str = "", original_tracks: list | None = None):
         if not tracks:
             self.worker.error.emit(tr("No songs that can be played"))
             return
         self._queue = list(tracks)
+        self._unshuffled = list(original_tracks) if original_tracks is not None else None
         self._state["contextUri"] = context_uri
         self._play_index(min(max(0, index), len(self._queue) - 1))
 
@@ -588,10 +754,12 @@ class Player(QObject):
 
         def on_done(tracks):
             idx = next((i for i, t in enumerate(tracks) if offset_uri and t.get("uri") == offset_uri), 0)
+            original = None
             if self._state.get("shuffle") and tracks and not offset_uri:
+                original = list(tracks)
                 tracks = list(tracks)
                 random.shuffle(tracks)
-            self._start_queue(tracks, idx, context_uri)
+            self._start_queue(tracks, idx, context_uri, original_tracks=original)
 
         self.worker.run(fetch_context, on_done, lambda e: self.worker.error.emit(str(e)))
 
@@ -601,12 +769,14 @@ class Player(QObject):
         self.stateChanged.emit()
 
         def fetch_and_shuffle():
-            tracks = list(self.catalog.tracks_for(context_uri))
-            self.cache_tracks(tracks)
-            random.shuffle(tracks)
-            return tracks
+            original = list(self.catalog.tracks_for(context_uri))
+            self.cache_tracks(original)
+            shuffled = list(original)
+            random.shuffle(shuffled)
+            return original, shuffled
 
-        self.worker.run(fetch_and_shuffle, lambda tracks: self._start_queue(tracks, 0, context_uri),
+        self.worker.run(fetch_and_shuffle,
+                        lambda pair: self._start_queue(pair[1], 0, context_uri, original_tracks=pair[0]),
                         lambda e: self.worker.error.emit(str(e)))
 
     @Slot(str)
@@ -616,11 +786,7 @@ class Player(QObject):
             seed = self._track_cache.get(uri)
             if not seed:
                 return
-
-            def find_seed():
-                hits = ytmusic.search(f"{seed.get('artists', '')} {seed.get('name', '')}").get("tracks") or []
-                return ytmusic.up_next(hits[0]["id"]) if hits else []
-            fetch = find_seed
+            fetch = lambda: self._radio_for(seed)
         else:
             fetch = lambda: ytmusic.up_next(uri.split(":", 2)[2])
 
@@ -630,15 +796,105 @@ class Player(QObject):
 
         self.worker.run(fetch, on_done, lambda e: self.worker.error.emit(str(e)))
 
+    def _remove_from_unshuffled(self, track: dict):
+        if not self._unshuffled:
+            return
+        idx = next((i for i, t in enumerate(self._unshuffled) if t is track), -1)
+        if idx < 0 and track.get("uri"):
+            uri = track["uri"]
+            idx = next((i for i, t in enumerate(self._unshuffled) if t.get("uri") == uri), -1)
+        if idx >= 0:
+            self._unshuffled.pop(idx)
+
     @Slot(str)
     def addToQueue(self, uri):
         def on_done(t):
             if t:
-                self._queue.append(t)
+                item = dict(t)
+                self._queue.append(item)
+                if self._unshuffled is not None:
+                    self._unshuffled.append(item)
                 self.queueChanged.emit()
+                self._prefetch_next()
                 self.worker.error.emit(tr("Added to queue"))
 
         self.worker.run(lambda: self._lookup(uri), on_done, lambda e: self.worker.error.emit(str(e)))
+
+    @Slot(str)
+    def playNext(self, uri):
+        def on_done(t):
+            if not t:
+                return
+            item = dict(t)
+            if not self._queue and not self._state.get("hasTrack"):
+                self._start_queue([item], 0)
+                return
+            if 0 <= self._queue_index < len(self._queue):
+                current = self._queue[self._queue_index]
+                self._queue.insert(self._queue_index + 1, item)
+                if self._unshuffled is not None:
+                    cur_idx = next((i for i, u in enumerate(self._unshuffled) if u is current), -1)
+                    if cur_idx < 0 and current.get("uri"):
+                        cur_idx = next((i for i, u in enumerate(self._unshuffled) if u.get("uri") == current["uri"]), -1)
+                    self._unshuffled.insert(cur_idx + 1 if cur_idx >= 0 else 0, item)
+            else:
+                self._queue.insert(0, item)
+                self._queue_index = 0
+                if self._unshuffled is not None:
+                    self._unshuffled.insert(0, item)
+            self.queueChanged.emit()
+            self._prefetch_next()
+            self.worker.error.emit(tr("Will play next"))
+
+        self.worker.run(lambda: self._lookup(uri), on_done, lambda e: self.worker.error.emit(str(e)))
+
+    @Slot(int)
+    def removeFromQueue(self, offset):
+        if self._queue_index < 0:
+            return
+        pos = self._queue_index + 1 + int(offset)
+        if not (self._queue_index < pos < len(self._queue)):
+            return
+        removed = self._queue.pop(pos)
+        self._remove_from_unshuffled(removed)
+        self.queueChanged.emit()
+        self._prefetch_next()
+
+    @Slot(int, int)
+    def moveInQueue(self, from_offset, to_offset):
+        if self._queue_index < 0:
+            return
+        base = self._queue_index + 1
+        from_pos = base + int(from_offset)
+        to_pos = base + int(to_offset)
+        if not (base <= from_pos < len(self._queue)) or not (base <= to_pos < len(self._queue)) or from_pos == to_pos:
+            return
+        item = self._queue.pop(from_pos)
+        self._queue.insert(to_pos, item)
+        self.queueChanged.emit()
+        self._prefetch_next()
+
+    @Slot()
+    def clearQueue(self):
+        cur = self._current_track()
+        if cur is not None:
+            self._queue = [cur]
+            self._queue_index = 0
+            self._unshuffled = [cur] if self._unshuffled is not None else None
+        else:
+            self._queue = []
+            self._queue_index = -1
+            self._unshuffled = None
+        self.queueChanged.emit()
+        self._prefetch_next()
+
+    @Slot(result="QVariantList")
+    def fullQueue(self):
+        return list(self._queue)
+
+    @Slot(result="QVariantList")
+    def queueUris(self):
+        return [t["uri"] for t in self._queue if t.get("uri")]
 
     @Slot()
     def toggleLike(self):
@@ -664,14 +920,173 @@ class Player(QObject):
 
     # ---- devices & queue --------------------------------------------------
 
+    def _on_audio_devices(self, raw_devices: list):
+        self._rebuild_devices(raw_devices)
+
+    def _on_audio_device(self, dev_id: str):
+        # Engine reports active device after startup/switch; rebuild list active highlight
+        raw = self.engine.audio_devices() if hasattr(self.engine, "audio_devices") else []
+        if raw:
+            self._rebuild_devices(raw)
+
+    def _rebuild_devices(self, raw_devices: list):
+        vol = int(self._state.get("volume", 80))
+        local_name = self._setting("device_name", "Senada")
+        active_id = self._audio_device or "auto"
+        items = []
+        for d in raw_devices or []:
+            dev_id = d.get("id") or d.get("name") or ""
+            if not dev_id:
+                continue
+            is_auto = dev_id == "auto"
+            desc = tr("System default") if is_auto else (d.get("description") or dev_id)
+            items.append({
+                "id": dev_id,
+                "name": desc,
+                "type": "computer" if is_auto else "speaker",
+                "active": dev_id == active_id or (active_id == "local" and is_auto),
+                "volume": vol,
+                "local": is_auto,
+                "restricted": False,
+            })
+        if not items:
+            items = [{
+                "id": "auto",
+                "name": f"{local_name}",
+                "type": "computer",
+                "active": True,
+                "volume": vol,
+                "local": True,
+                "restricted": False,
+            }]
+        elif not any(x["active"] for x in items):
+            items[0]["active"] = True
+        self._devices = items
+        active_item = next((x for x in items if x["active"]), items[0])
+        self._state["deviceId"] = active_item["id"]
+        self._state["deviceName"] = active_item["name"]
+        self._state["deviceType"] = active_item["type"]
+        self.devicesChanged.emit()
+        self.stateChanged.emit()
+
+    @Slot()
+    def applyAudioSettings(self):
+        q = str(self._setting("audio_quality", "best") or "best").lower()
+        self.streams.set_quality(q)
+        if hasattr(self.engine, "set_quality"):
+            self.engine.set_quality(q)
+        if not (hasattr(self.engine, "audio_devices") and self.engine.audio_devices()):
+            self._rebuild_devices([])
+
     @Slot()
     def refreshDevices(self):
-        self.devicesChanged.emit()
+        devs = self.engine.audio_devices() if hasattr(self.engine, "audio_devices") else []
+        self._rebuild_devices(devs)
+        if not devs and hasattr(self.engine, "probe_audio_devices"):
+            self.worker.run(self.engine.probe_audio_devices,
+                            lambda probed: self._rebuild_devices(probed),
+                            lambda _e: None)
 
     @Slot(str)
     def transfer(self, device_id):
-        pass
+        dev = str(device_id or "auto").strip() or "auto"
+        if dev == "local":
+            dev = "auto"
+        self._audio_device = dev
+        if isinstance(self.settings, dict) or hasattr(self.settings, "__setitem__"):
+            self.settings["audio_device"] = dev
+        if hasattr(self.engine, "set_audio_device"):
+            self.engine.set_audio_device(dev)
+        devs = self.engine.audio_devices() if hasattr(self.engine, "audio_devices") else []
+        self._rebuild_devices(devs)
 
     @Slot()
     def refreshQueue(self):
         self.queueChanged.emit()
+
+    # ---- session persistence --------------------------------------------
+
+    @staticmethod
+    def _serialize_track(track: dict) -> dict:
+        keys = ("uri", "id", "name", "artists", "artistId", "album", "albumId",
+                "imageSmall", "image", "imageLarge", "durationMs", "explicit", "matchScore")
+        return {k: track[k] for k in keys if k in track and track[k] is not None}
+
+    def save_playback_state(self, path: Path = PLAYBACK_FILE):
+        try:
+            path = Path(path)
+            if not self._queue or self._queue_index < 0:
+                if path.exists():
+                    path.unlink()
+                return
+            data = {
+                "queue": [self._serialize_track(t) for t in self._queue],
+                "index": self._queue_index,
+                "positionMs": int(self._position or 0),
+                "shuffle": bool(self._state.get("shuffle", False)),
+                "repeat": self._state.get("repeat", "off"),
+                "contextUri": self._state.get("contextUri", ""),
+                "volume": int(self._state.get("volume", 80)),
+            }
+            if self._unshuffled is not None:
+                data["unshuffled"] = [self._serialize_track(t) for t in self._unshuffled]
+            write_private(path, data)
+        except OSError as e:
+            logger.debug("could not save playback state: %s", e)
+
+    def restore_playback_state(self, path: Path = PLAYBACK_FILE) -> bool:
+        path = Path(path)
+        if not path.exists():
+            return False
+        data = read_json(path)
+        if not isinstance(data, dict):
+            return False
+        queue = [t for t in (data.get("queue") or []) if isinstance(t, dict) and t.get("uri")]
+        if not queue:
+            return False
+        idx = max(0, min(int(data.get("index", 0)), len(queue) - 1))
+        track = queue[idx]
+        self._queue = queue
+        self._queue_index = idx
+        unshuffled = data.get("unshuffled")
+        self._unshuffled = [t for t in unshuffled if isinstance(t, dict) and t.get("uri")] if isinstance(unshuffled, list) and unshuffled else None
+        self.cache_tracks(queue)
+
+        vol = max(0, min(100, int(data.get("volume", self._state.get("volume", 80)))))
+        repeat = data.get("repeat", "off")
+        if repeat not in ("off", "context", "track"):
+            repeat = "off"
+        shuffle = bool(data.get("shuffle", False))
+        context_uri = data.get("contextUri") or ""
+        liked = self.store.is_liked(track.get("uri", "")) if self.store is not None else False
+
+        self._state = {
+            **self._state,
+            **track,
+            "hasTrack": True,
+            "isPlaying": False,
+            "liked": liked,
+            "shuffle": shuffle,
+            "repeat": repeat,
+            "contextUri": context_uri,
+            "volume": vol,
+        }
+        self._devices[0]["volume"] = vol
+        self.engine.set_volume(vol)
+
+        pos = max(0, int(data.get("positionMs", 0)))
+        dur = int(track.get("durationMs") or 0)
+        if dur > 0:
+            pos = min(pos, dur)
+        self._position = pos
+        self._restored_pending = True
+
+        self.stateChanged.emit()
+        self.positionChanged.emit()
+        self.trackChanged.emit()
+        self.queueChanged.emit()
+
+        art = track.get("imageSmall")
+        if art:
+            self._on_cover(art)
+        return True
