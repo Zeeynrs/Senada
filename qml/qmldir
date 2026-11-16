@@ -14,6 +14,8 @@ DownloadButton 1.0 DownloadButton.qml
 EqualizerLines 1.0 EqualizerLines.qml
 EqualizerView 1.0 EqualizerView.qml
 FullViewPreview 1.0 FullViewPreview.qml
+GlassBackdrop 1.0 GlassBackdrop.qml
+GlassSurface 1.0 GlassSurface.qml
 HomePage 1.0 HomePage.qml
 Icon 1.0 Icon.qml
 LogoMark 1.0 LogoMark.qml

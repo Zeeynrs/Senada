@@ -91,7 +91,7 @@ class Session(QObject):
 
     # ---- glass ("liquid glass") look -------------------------------------------
 
-    GLASS_MODES = ("off", "cover", "desktop")
+    GLASS_MODES = ("off", "cover", "desktop", "liquid")
 
     def set_window(self, window):
         """The main window, so the native see-through backdrop can follow the setting."""

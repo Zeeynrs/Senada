@@ -15,10 +15,20 @@ TextField {
     selectedTextColor: Theme.text
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.liquid ? height / 2 : 12
         color: f.activeFocus ? Theme.surface : f.hovered ? Theme.hover : Theme.subtle
         border.width: 1
         border.color: f.activeFocus ? (Theme.accented ? Theme.primary : Theme.lineStrong) : Theme.line
+        Loader {
+            anchors.fill: parent
+            active: Theme.liquid
+            sourceComponent: GlassSurface {
+                refractive: false
+                radius: height / 2
+                materialColor: Theme.surface
+                border.color: f.activeFocus ? Theme.lineStrong : Theme.glassRim
+            }
+        }
         Icon {
             visible: f.iconName !== ""
             glyph: f.iconName

@@ -10,10 +10,16 @@ Rectangle {
     signal close()
     readonly property var s: player.state
 
-    color: Theme.sidebar
+    color: Theme.liquid ? "transparent" : Theme.sidebar
+    radius: Theme.panelRadius
     clip: true
 
-    Rectangle { width: 1; height: parent.height; color: Theme.line }
+    Loader {
+        anchors.fill: parent
+        active: Theme.liquid
+        sourceComponent: GlassSurface {}
+    }
+    Rectangle { visible: !Theme.liquid; width: 1; height: parent.height; color: Theme.line }
 
     // header: two tabs and a close button
     RowLayout {

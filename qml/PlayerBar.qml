@@ -19,13 +19,24 @@ Rectangle {
     property int lastVolume: 50
 
     implicitHeight: Theme.playerBarHeight
-    color: floating ? (Theme.glass ? Theme.sidebar : Theme.surface2) : Theme.sidebar
+    color: Theme.liquid ? "transparent" : floating ? (Theme.glass ? Theme.sidebar : Theme.surface2) : Theme.sidebar
     radius: floating ? 24 : 0
-    border.width: floating ? 1 : 0
+    border.width: floating && !Theme.liquid ? 1 : 0
     border.color: floating ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.1) : Qt.rgba(0, 0, 0, 0.08)) : Theme.line
 
     // ---- floating: the cover, blurred into the card, under a veil lit with the song's colour --
-    readonly property string art: floating && hasTrack ? (s.image || s.imageSmall || "") : ""
+    Loader {
+        anchors.fill: parent
+        active: Theme.liquid
+        sourceComponent: GlassSurface {
+            radius: bar.radius
+            // Software rendering cannot isolate the backdrop from the scrolling
+            // page underneath this floating bar; a denser fill keeps it readable.
+            materialColor: bar.GraphicsInfo.api === GraphicsInfo.Software
+                ? Theme.alpha(Theme.glassTint, 0.94) : Theme.glassFill
+        }
+    }
+    readonly property string art: floating && hasTrack && !Theme.liquid ? (s.image || s.imageSmall || "") : ""
     Item {
         id: glassArt
         visible: false
@@ -69,7 +80,7 @@ Rectangle {
     readonly property color veilEnd: Theme.dark ? Qt.rgba(0.08, 0.08, 0.08, 0.84) : Qt.rgba(1, 1, 1, 0.88)
     Rectangle {
         anchors.fill: parent
-        visible: bar.floating
+        visible: bar.floating && !Theme.liquid
         radius: bar.radius
         gradient: Gradient {
             orientation: Gradient.Horizontal
@@ -85,7 +96,7 @@ Rectangle {
     }
     Rectangle {  // light from above, so the card reads as raised glass
         anchors.fill: parent
-        visible: bar.floating
+        visible: bar.floating && !Theme.liquid
         radius: bar.radius
         gradient: Gradient {
             GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Theme.dark ? 0.07 : 0.35) }
@@ -100,6 +111,7 @@ Rectangle {
         width: parent.width - 2 * bar.radius
         height: 1
         color: Theme.sheen
+        visible: !Theme.liquid
     }
 
     // ---- now playing ------------------------------------------------------------------

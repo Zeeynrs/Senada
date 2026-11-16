@@ -28,8 +28,8 @@ Popup {
         open()
     }
 
-    readonly property color paneLeft: Theme.dark ? "#161616" : "#f1f1f1"
-    readonly property color paneRight: Theme.dark ? "#0d0d0d" : "#ffffff"
+    readonly property color paneLeft: Theme.liquid ? Theme.glassFill : Theme.dark ? "#161616" : "#f1f1f1"
+    readonly property color paneRight: Theme.liquid ? Theme.alpha(Theme.glassTint, 0.68) : Theme.dark ? "#0d0d0d" : "#ffffff"
 
     // `words` are English labels inside the section, searched in both languages
     readonly property var sections: [
@@ -37,7 +37,7 @@ Popup {
           desc: "Language, theme and the look of the app.",
           words: ["Interface language", "Language", "Theme", "Color mode", "Dark", "Light", "Follow system",
                   "Accent color", "Accent strength", "Color", "Logo",
-                  "Glass effect", "Glass thickness", "Transparent", "Album cover", "Visualizer",
+                  "Glass effect", "Glass thickness", "Liquid Glass", "Transparent", "Album cover", "Visualizer",
                   "Full view style", "Vinyl record", "Turntable", "Full view", "Poster", "Magazine",
                   "Cinema", "Movie", "Subtitles",
                   "Seek bar", "Progress bar", "Wave", "Waveform", "Dots", "Player bar", "Docked", "Floating",
@@ -113,8 +113,16 @@ Popup {
     }
     background: Rectangle {
         radius: 20
-        color: dlg.paneLeft
+        color: Theme.liquid ? "transparent" : dlg.paneLeft
         border.color: Theme.line
+        Loader {
+            anchors.fill: parent
+            active: Theme.liquid
+            sourceComponent: GlassSurface {
+                radius: 20
+                materialColor: Theme.alpha(Theme.glassTint, Theme.dark ? 0.85 : 0.8)
+            }
+        }
     }
 
     // ---- building blocks ---------------------------------------------------------------
@@ -927,7 +935,9 @@ Popup {
             Divider {}
             SettingRow {
                 label: I18n.t("Glass effect")
-                hint: session.glassMode === "desktop"
+                hint: session.glassMode === "liquid"
+                      ? I18n.t("Rounded glass panels with soft refraction, luminous edges and a floating player. Follows the album artwork, with ambient colors when nothing is playing.")
+                      : session.glassMode === "desktop"
                       ? I18n.t("See-through window. The blur behind it comes from the system: acrylic on Windows 11, blur on Windows 10, Hyprland blur or the KDE blur effect. Without a compositor the background can turn black.")
                       : session.glassMode === "cover"
                       ? I18n.t("See-through panels over the blurred cover of the song. Works on every system.")
@@ -935,6 +945,7 @@ Popup {
                 NCombo {
                     model: [
                         { key: "off", label: I18n.t("Off") },
+                        { key: "liquid", label: I18n.t("Liquid Glass") },
                         { key: "cover", label: I18n.t("Album cover") },
                         { key: "desktop", label: I18n.t("Transparent") }
                     ]
@@ -996,7 +1007,8 @@ Popup {
             Divider {}
             SettingBlock {
                 label: I18n.t("Player bar")
-                hint: session.playerBarStyle === "floating"
+                hint: Theme.liquid ? I18n.t("Liquid Glass uses a floating player. Your player bar choice returns with the other glass modes.")
+                      : session.playerBarStyle === "floating"
                       ? I18n.t("A rounded card floating above the bottom of the window, with a soft shadow.")
                       : I18n.t("Along the whole bottom edge of the window.")
                 RowLayout {

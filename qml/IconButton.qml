@@ -30,6 +30,16 @@ AbstractButton {
         scale: b.filled && b.hovered ? 1.05 : 1
         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         Behavior on color { ColorAnimation { duration: 120 } }
+        Loader {
+            anchors.fill: parent
+            active: Theme.liquid && !b.filled && (b.hovered || b.active || b.outlined)
+            sourceComponent: GlassSurface {
+                refractive: false
+                radius: height / 2
+                materialColor: b.active ? Theme.selected : Theme.hover
+                highlight: b.down ? 0.35 : 0.8
+            }
+        }
     }
 
     contentItem: Item {

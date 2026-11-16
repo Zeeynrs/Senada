@@ -13,24 +13,34 @@ QtObject {
     property string mode: "system"
     readonly property bool dark: mode === "dark" || (mode !== "light" && Qt.styleHints.colorScheme !== Qt.ColorScheme.Light)
 
-    // glass look (bound to session in Main.qml): "off" | "cover" | "desktop"
+    // glass look (bound to session in Main.qml): "off" | "cover" | "desktop" | "liquid"
     property string glassMode: "off"
     property real glassOpacity: 0.62
     readonly property bool glass: glassMode !== "off"
+    readonly property bool liquid: glassMode === "liquid"
+    // Only the decorative backdrop is sampled, never controls or text (no recursive capture).
+    property Item liquidBackdrop: null
+    property Item liquidSource: null
+    readonly property int panelRadius: liquid ? 24 : 0
+    readonly property int panelGap: liquid ? 10 : 0
+    readonly property color glassTint: dark ? "#161d32" : "#f8faff"
+    readonly property color glassRim: dark ? Qt.rgba(1, 1, 1, 0.26) : Qt.rgba(1, 1, 1, 0.85)
+    readonly property color glassFill: alpha(glassTint, dark ? 0.26 + glassOpacity * 0.55 : 0.3 + glassOpacity * 0.58)
 
     // base & surfaces; with glass on, the big areas turn translucent
     readonly property color bgSolid: dark ? "#121212" : "#fafafa"
     readonly property color sidebarSolid: dark ? "#000000" : "#f0f0f0"
     readonly property color bg: glass ? alpha(bgSolid, glassOpacity * 0.8) : bgSolid           // content area
     readonly property color sidebar: glass ? alpha(sidebarSolid, Math.min(1, glassOpacity + 0.08)) : sidebarSolid
-    readonly property color surface: glass ? (dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.55))
+    readonly property color surface: liquid ? (dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.46))
+                                    : glass ? (dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.55))
                                            : (dark ? "#1b1b1b" : "#ffffff")   // cards, now-playing card
     readonly property color surface2: dark ? "#222222" : "#ffffff"  // menus, popups, dialogs
     readonly property color surface3: dark ? "#2a2a2a" : "#e9e9e9"  // placeholders, tracks of sliders
 
     // text
     readonly property color text: dark ? "#f5f5f5" : "#111111"
-    readonly property color dim: dark ? "#a3a3a3" : "#5c5c5c"
+    readonly property color dim: liquid ? (dark ? "#bcc6dc" : "#49536b") : dark ? "#a3a3a3" : "#5c5c5c"
     readonly property color faint: dark ? "#6b6b6b" : "#9a9a9a"
 
     // lines & interaction fills

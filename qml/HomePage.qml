@@ -8,6 +8,7 @@ Item {
     readonly property var home: library.home
     readonly property var sections: home.sections || []
     readonly property bool wide: width > 1000
+    readonly property bool compactGlass: Theme.liquid && width < 440
     readonly property var liked: (library.likedRevision, library.likedPreview)
     // what the "now playing" card offers: the current track, else the last one played
     readonly property bool live: !!player.state.hasTrack
@@ -76,8 +77,8 @@ Item {
                     spacing: 16
 
                     Cover {
-                        Layout.preferredWidth: 72
-                        Layout.preferredHeight: 72
+                        Layout.preferredWidth: page.compactGlass ? 48 : 72
+                        Layout.preferredHeight: page.compactGlass ? 48 : 72
                         radius: 8
                         source: page.resume ? (page.resume.image || page.resume.imageSmall || "") : ""
                         fallbackIcon: "music"
@@ -86,8 +87,11 @@ Item {
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         spacing: 2
                         Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
                             text: page.resume ? (page.live ? I18n.t("Now playing") : I18n.t("Last played")) : I18n.t("Welcome to Senada")
                             color: Theme.dim
                             font.pixelSize: 12
@@ -150,7 +154,8 @@ Item {
                     }
                     NButton {
                         visible: !page.resume
-                        text: I18n.t("Search songs")
+                        text: page.compactGlass ? "" : I18n.t("Search songs")
+                        Accessible.name: I18n.t("Search songs")
                         iconName: "search"
                         primary: true
                         onClicked: Nav.go("search")

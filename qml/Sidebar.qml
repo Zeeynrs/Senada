@@ -10,11 +10,17 @@ Rectangle {
     property bool settingsOpen: false
     property string libraryFilter   // filter of the open library page, "" otherwise
     property bool libraryOpen: true
-    color: Theme.sidebar
+    color: Theme.liquid ? "transparent" : Theme.sidebar
+    radius: Theme.panelRadius
     implicitWidth: Theme.sidebarWidth
     clip: true
 
-    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+    Loader {
+        anchors.fill: parent
+        active: Theme.liquid
+        sourceComponent: GlassSurface {}
+    }
+    Rectangle { visible: !Theme.liquid; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
 
     // one navigation entry
     component NavEntry: AbstractButton {
@@ -28,14 +34,24 @@ Rectangle {
         hoverEnabled: true
         focusPolicy: Qt.TabFocus
         background: Rectangle {
-            radius: 8
+            radius: Theme.liquid ? height / 2 : 8
             color: e.current ? Theme.selected : e.hovered ? Theme.subtle : "transparent"
             border.width: e.visualFocus ? 1 : 0
             border.color: Theme.lineStrong
             Behavior on color { ColorAnimation { duration: 140 } }
+            Loader {
+                anchors.fill: parent
+                active: Theme.liquid && e.current
+                sourceComponent: GlassSurface {
+                    refractive: false
+                    radius: height / 2
+                    border.color: e.visualFocus ? Theme.lineStrong : Theme.glassRim
+                    materialColor: Theme.selected
+                }
+            }
             // accent mark on the left edge of the open page
             Rectangle {
-                visible: e.current && Theme.accented
+                visible: e.current && Theme.accented && !Theme.liquid
                 anchors.verticalCenter: parent.verticalCenter
                 x: 0
                 width: 3; height: 16; radius: 1.5
@@ -91,9 +107,16 @@ Rectangle {
             }
         }
         // library sections, with a guide line like a tree
-        Item {
+        Flickable {
             Layout.fillWidth: true
-            implicitHeight: side.libraryOpen ? subCol.implicitHeight : 0
+            // Keep Settings and the saved list reachable above the floating player
+            // on short windows. The library tree can scroll independently.
+            implicitHeight: !side.libraryOpen ? 0 : Theme.liquid
+                ? Math.min(subCol.implicitHeight, Math.max(80, side.height - Theme.floatInset - 330))
+                : subCol.implicitHeight
+            contentHeight: subCol.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: NScrollBar {}
             visible: implicitHeight > 0
             clip: true
             Behavior on implicitHeight { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }

@@ -16,10 +16,16 @@ Rectangle {
     signal togglePanel()
 
     implicitHeight: 48
-    color: Theme.sidebar
+    color: Theme.liquid ? "transparent" : Theme.sidebar
+    radius: Theme.panelRadius
+    Loader {
+        anchors.fill: parent
+        active: Theme.liquid
+        sourceComponent: GlassSurface { radius: height / 2 }
+    }
 
-    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
-    Rectangle { width: parent.width; height: 1; color: Theme.sheen }  // liquid-glass sheen
+    Rectangle { visible: !Theme.liquid; anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
+    Rectangle { visible: !Theme.liquid; width: parent.width; height: 1; color: Theme.sheen }
 
     RowLayout {
         anchors.fill: parent

@@ -10,7 +10,7 @@ Item {
     property bool sidebarOpen: true
     property string panel: "lyrics"   // right panel: "lyrics" | "queue" | "" (closed)
     // the player bar as a rounded card floating above the bottom edge (Settings → Appearance)
-    readonly property bool floatingBar: session.playerBarStyle === "floating"
+    readonly property bool floatingBar: Theme.liquid || session.playerBarStyle === "floating"
     property var forwardStack: []     // pages left with "back", for "forward"
 
     readonly property string currentKey: stack.currentItem ? stack.currentItem.pageKey : ""
@@ -190,6 +190,27 @@ Item {
     }
 
     // ---- glass backdrop ----------------------------------------------------------------
+    Loader {
+        id: liquidScene
+        anchors.fill: parent
+        active: Theme.liquid
+        sourceComponent: GlassBackdrop { artwork: player.state.image || player.state.imageSmall || "" }
+    }
+    Loader {
+        id: liquidTexture
+        active: Theme.liquid
+        sourceComponent: ShaderEffectSource {
+            sourceItem: liquidScene.item
+            textureSize: Qt.size(Math.max(1, Math.round(shell.width * 0.5)),
+                                 Math.max(1, Math.round(shell.height * 0.5)))
+            live: true
+            visible: false
+            hideSource: false
+        }
+    }
+    Binding { target: Theme; property: "liquidBackdrop"; value: liquidScene.item }
+    Binding { target: Theme; property: "liquidSource"; value: liquidTexture.item }
+
     // "Sampul album": the current cover, heavily blurred, fills the window behind the
     // translucent panels. ("Transparan" leaves the window itself see-through instead.)
     Item {
@@ -221,7 +242,15 @@ Item {
     // content background (translucent in the glass modes)
     Rectangle {
         anchors.fill: content
-        color: Theme.bg
+        color: Theme.liquid ? "transparent" : Theme.bg
+    }
+    Loader {
+        anchors.fill: content
+        active: Theme.liquid
+        sourceComponent: GlassSurface {
+            materialColor: Theme.alpha(Theme.glassTint, Theme.dark ? 0.45 + Theme.glassOpacity * 0.35
+                                                                               : 0.4 + Theme.glassOpacity * 0.4)
+        }
     }
     // "vivid" accent: a soft glow of the accent colour at the top of the pages
     Rectangle {
@@ -229,6 +258,7 @@ Item {
         anchors.right: content.right
         anchors.top: content.top
         height: Math.min(380, content.height * 0.6)
+        radius: Theme.panelRadius
         opacity: Theme.glowOn ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 300 } }
@@ -244,6 +274,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
+        anchors.margins: Theme.liquid ? 12 : 0
         canGoBack: stack.depth > 1
         canGoForward: shell.forwardStack.length > 0
         sidebarOpen: shell.sidebarOpen
@@ -258,6 +289,9 @@ Item {
         id: sidebar
         anchors.left: parent.left
         anchors.top: topBar.bottom
+        anchors.leftMargin: Theme.liquid ? 12 : 0
+        anchors.topMargin: Theme.panelGap
+        anchors.bottomMargin: Theme.liquid ? 12 : 0
         // floating: runs on under the bar, which floats over it
         anchors.bottom: shell.floatingBar ? parent.bottom : playerBar.top
         width: shell.sidebarOpen ? Theme.sidebarWidth : 0
@@ -272,6 +306,9 @@ Item {
         id: rightPanel
         anchors.right: parent.right
         anchors.top: topBar.bottom
+        anchors.rightMargin: Theme.liquid ? 12 : 0
+        anchors.topMargin: Theme.panelGap
+        anchors.bottomMargin: Theme.liquid ? 12 : 0
         // floating: runs on under the bar, which floats over it
         anchors.bottom: shell.floatingBar ? parent.bottom : playerBar.top
         width: shell.panel !== "" ? Math.min(Theme.rightPanelWidth, shell.width * 0.3) : 0
@@ -287,6 +324,10 @@ Item {
         anchors.top: topBar.bottom
         anchors.left: sidebar.right
         anchors.right: rightPanel.left
+        anchors.topMargin: Theme.panelGap
+        anchors.leftMargin: Theme.panelGap
+        anchors.rightMargin: Theme.panelGap
+        anchors.bottomMargin: Theme.liquid ? 12 : 0
         // floating: runs on under the bar, which floats over it
         anchors.bottom: shell.floatingBar ? parent.bottom : playerBar.top
         clip: true

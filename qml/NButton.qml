@@ -20,6 +20,17 @@ AbstractButton {
         border.width: b.primary && !b.visualFocus ? 0 : 1
         border.color: b.visualFocus || b.hovered ? Theme.lineStrong : Theme.line
         Behavior on color { ColorAnimation { duration: 120 } }
+        Loader {
+            anchors.fill: parent
+            active: Theme.liquid && !b.primary
+            sourceComponent: GlassSurface {
+                refractive: false
+                radius: height / 2
+                border.color: b.visualFocus ? Theme.lineStrong : Theme.glassRim
+                materialColor: b.down ? Theme.pressed : b.hovered ? Theme.hover : Theme.surface
+                highlight: b.down ? 0.35 : b.hovered ? 1.2 : 0.7
+            }
+        }
     }
     contentItem: Item {
         Row {
