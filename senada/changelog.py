@@ -14,6 +14,68 @@ CHANGELOG = [
         "id": {"new": [], "fixed": []},
     },
     {
+        "version": "1.1.0",
+        "date": "2026-11-16",
+        "en": {
+            "new": [
+                "Liquid Glass (Settings → Appearance → Glass effect): rounded panels with soft refraction, "
+                "luminous edges and a floating player. Follows the album artwork or ambient colors when idle, "
+                "supports light and dark mode, and offers adjustable transparency and a software-rendering fallback.",
+                "More queue controls: play next, move or remove upcoming songs, clear the queue, or save it as a "
+                "playlist. Optional Autoplay keeps similar music playing when the queue ends.",
+                "Pick up where you left off: Senada restores the last song, queue, position and volume on startup, "
+                "paused until you press play.",
+                "Audio output selection, saved custom equalizer presets and a quick audio popup in the player bar.",
+                "Lyrics timing adjustments saved per song, plus embedded lyrics from local music files when no "
+                "sidecar .lrc file is available.",
+                "Reorder and remove duplicates in your playlists, refresh imported playlists from their source, "
+                "and import or export M3U/M3U8 playlists. Browse local files by album, artist or folder.",
+                "Search suggestions, recent searches and local-library results when online search is unavailable.",
+                "Expanded listening stats: top albums, listening by hour, current and longest streaks, recent "
+                "plays, and a listening recap card you can copy or save as an image.",
+                "The phone remote now shows the queue and lyrics and supports queue management. QR codes also "
+                "work with Senada's built-in generator when the optional QR package is unavailable.",
+            ],
+            "fixed": [
+                "Turning shuffle off restores the original order of upcoming songs.",
+                "Audio quality and output-device changes reach the playback engine and both crossfade players.",
+                "Refreshing an imported playlist preserves artwork and match information for existing songs.",
+                "Liquid Glass keeps Settings reachable on short windows and the home-page search button visible "
+                "in narrow layouts. Software rendering uses a denser player surface for readable controls.",
+            ],
+        },
+        "id": {
+            "new": [
+                "Liquid Glass (Pengaturan → Tampilan → Efek kaca): panel membulat dengan pembiasan lembut, "
+                "tepi berkilau, dan pemutar mengambang. Mengikuti sampul album atau warna latar saat belum ada "
+                "lagu, mendukung mode terang/gelap, transparansi yang bisa diatur, serta fallback renderer software.",
+                "Kontrol antrean lebih lengkap: putar berikutnya, pindahkan atau hapus lagu mendatang, kosongkan "
+                "antrean, atau simpan sebagai playlist. Autoplay opsional melanjutkan musik serupa saat antrean habis.",
+                "Lanjutkan sesi sebelumnya: Senada memulihkan lagu terakhir, antrean, posisi, dan volume saat "
+                "dibuka, dalam keadaan jeda sampai kamu menekan putar.",
+                "Pilihan output audio, preset equalizer buatan sendiri yang tersimpan, dan popup audio cepat "
+                "di bilah pemutar.",
+                "Penyesuaian waktu lirik tersimpan per lagu, serta lirik tertanam dari file musik lokal saat "
+                "tidak ada file .lrc pendamping.",
+                "Urutkan ulang dan hapus duplikat dalam playlist, perbarui playlist impor dari sumbernya, dan "
+                "impor atau ekspor playlist M3U/M3U8. Jelajahi file lokal berdasarkan album, artis, atau folder.",
+                "Saran pencarian, riwayat pencarian, dan hasil dari library lokal saat pencarian online tidak tersedia.",
+                "Statistik lebih lengkap: album teratas, aktivitas per jam, rentetan hari mendengarkan saat ini "
+                "dan terpanjang, riwayat putar terbaru, serta kartu rangkuman yang bisa disalin atau disimpan sebagai gambar.",
+                "Remote HP kini menampilkan antrean dan lirik serta mendukung pengelolaan antrean. Kode QR juga "
+                "bisa dibuat dengan generator bawaan Senada saat paket QR opsional tidak tersedia.",
+            ],
+            "fixed": [
+                "Mematikan acak mengembalikan urutan asli lagu-lagu mendatang.",
+                "Perubahan kualitas audio dan perangkat output diterapkan ke mesin pemutar dan kedua pemutar crossfade.",
+                "Memperbarui playlist impor mempertahankan sampul dan informasi kecocokan lagu yang sudah ada.",
+                "Liquid Glass menjaga tombol Pengaturan tetap terjangkau pada jendela pendek dan tombol cari "
+                "di Beranda tetap terlihat pada tata letak sempit. Renderer software memakai bilah pemutar "
+                "lebih pekat agar kontrol tetap terbaca.",
+            ],
+        },
+    },
+    {
         "version": "1.0.12",
         "date": "2026-11-14",
         "en": {
