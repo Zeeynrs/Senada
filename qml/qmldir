@@ -71,3 +71,5 @@ ShareLyricsDialog 1.0 ShareLyricsDialog.qml
 ShareStatsDialog 1.0 ShareStatsDialog.qml
 RestoreDialog 1.0 RestoreDialog.qml
 StatsPage 1.0 StatsPage.qml
+StreakEmblem 1.0 StreakEmblem.qml
+StreakCard 1.0 StreakCard.qml

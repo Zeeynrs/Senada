@@ -12,7 +12,7 @@ import sqlite3
 import threading
 import time
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, QTimer, Signal, Slot
 
 from .config import CONFIG_DIR
 
@@ -56,15 +56,30 @@ class PlayLog:
             at REAL NOT NULL, uri TEXT NOT NULL, name TEXT, artists TEXT, artist TEXT, album TEXT,
             image TEXT, listened_ms INTEGER NOT NULL, duration_ms INTEGER)""")
         self._db.execute("CREATE INDEX IF NOT EXISTS plays_at ON plays(at)")
+        needs_daily_history = self._db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'listening_days'"
+        ).fetchone() is None
+        self._db.execute("BEGIN")
+        self._db.execute("CREATE TABLE IF NOT EXISTS listening_days (day TEXT PRIMARY KEY)")
+        if needs_daily_history:
+            # Import old, already-qualified history once. New completed plays do
+            # not bypass per-day qualification when a song spans midnight.
+            self._db.execute("""INSERT OR IGNORE INTO listening_days
+                SELECT DISTINCT strftime('%Y-%m-%d', at, 'unixepoch', 'localtime')
+                FROM plays WHERE at IS NOT NULL""")
         self._db.commit()
 
-    def add(self, track: dict, listened_ms: int, at: float):
+    def add(self, track: dict, listened_ms: int, at: float, *, mark_day: bool = True):
+        """Store a completed listen; the live tracker qualifies its days separately."""
         with self._lock:
             self._db.execute("INSERT INTO plays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
                 at, track.get("uri", ""), track.get("name", ""), track.get("artists", ""),
                 primary_artist(track.get("artists", "")), track.get("album", ""),
                 track.get("imageSmall") or track.get("image") or "", int(listened_ms),
                 int(track.get("durationMs") or 0)))
+            if mark_day and counts_as_play(listened_ms, int(track.get("durationMs") or 0)):
+                self._db.execute("INSERT OR IGNORE INTO listening_days VALUES (?)",
+                                 (datetime.date.fromtimestamp(at).isoformat(),))
             self._db.commit()
 
     def _rows(self, sql, args=()):
@@ -110,18 +125,36 @@ class PlayLog:
 
     def streaks(self, today: datetime.date | None = None) -> tuple[int, int]:
         """Return (current_streak_days, longest_streak_days) across all recorded local play dates."""
-        rows = self._rows("""SELECT DISTINCT strftime('%Y-%m-%d', at, 'unixepoch', 'localtime') AS d
-            FROM plays ORDER BY d""")
+        return self.streak_status(today)[:2]
+
+    def mark_listened_day(self, at: float) -> bool:
+        """Persist a qualified live listen without creating a completed play."""
+        day = datetime.date.fromtimestamp(at).isoformat()
+        with self._lock:
+            inserted = self._db.execute("INSERT OR IGNORE INTO listening_days VALUES (?)", (day,)).rowcount
+            self._db.commit()
+        return inserted > 0
+
+    def streak_status(self, today: datetime.date | None = None) -> tuple[int, int, bool]:
+        """Current streak, personal best and whether today's listening has qualified.
+
+        Historical play dates are imported once when the daily table is created.
+        New days can be earned before the currently playing song is finished.
+        """
+        today = today or datetime.date.today()
+        rows = self._rows("SELECT day FROM listening_days ORDER BY day")
         dates = []
         for (raw,) in rows:
             if not raw:
                 continue
             try:
-                dates.append(datetime.date.fromisoformat(raw))
+                day = datetime.date.fromisoformat(raw)
+                if day <= today:
+                    dates.append(day)
             except ValueError:
                 continue
         if not dates:
-            return 0, 0
+            return 0, 0, False
         longest = run = 1
         for i in range(1, len(dates)):
             if dates[i] == dates[i - 1] + datetime.timedelta(days=1):
@@ -129,14 +162,13 @@ class PlayLog:
                 longest = max(longest, run)
             else:
                 run = 1
-        today = today or datetime.date.today()
         date_set = set(dates)
         cursor = today if today in date_set else (today - datetime.timedelta(days=1))
         current = 0
         while cursor in date_set:
             current += 1
             cursor -= datetime.timedelta(days=1)
-        return current, longest
+        return current, longest, today in date_set
 
     def first_play(self) -> float:
         row = self._rows("SELECT MIN(at) FROM plays")[0]
@@ -186,12 +218,46 @@ class Stats(QObject):
             logger.warning("listening statistics are off: %s", e)
             self.log = None
         tracker.finished.connect(self._on_finished)
+        self._qualified_day = None
+        progress = getattr(tracker, "listeningProgress", None)
+        if progress is not None:
+            progress.connect(self._on_listening_progress)
+        self._midnight = QTimer(self, singleShot=True, timeout=self._on_midnight)
+        self._schedule_midnight()
+
+    def _schedule_midnight(self):
+        if QCoreApplication.instance() is None:
+            return
+        now = datetime.datetime.now()
+        tomorrow = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), datetime.time())
+        self._midnight.start(max(1, int((tomorrow.timestamp() - now.timestamp()) * 1000) + 50))
+
+    def _on_midnight(self):
+        self.changed.emit()
+        self._schedule_midnight()
+
+    def _on_listening_progress(self, track, listened_ms, at):
+        if self.log is None or not counts_as_play(listened_ms, int(track.get("durationMs") or 0)):
+            return
+        day = datetime.date.fromtimestamp(at)
+        if self._qualified_day == day:
+            return
+        self._qualified_day = day
+        try:
+            added = self.log.mark_listened_day(at)
+        except sqlite3.Error as e:
+            logger.warning("a listening day was not recorded: %s", e)
+            return
+        if added:
+            self.changed.emit()
 
     def _on_finished(self, track, listened_ms, at):
         if self.log is None or not counts_as_play(listened_ms, int(track.get("durationMs") or 0)):
             return
         try:
-            self.log.add(track, listened_ms, at)
+            # A completed play is timestamped when it began. Daily qualification
+            # uses the actual per-day progress, including songs crossing midnight.
+            self.log.add(track, listened_ms, at, mark_day=False)
         except sqlite3.Error as e:
             logger.warning("a play was not recorded: %s", e)
             return
@@ -203,21 +269,23 @@ class Stats(QObject):
 
     @Slot(str, result="QVariantMap")
     def summary(self, period):
-        """{plays, minutes, songs, artists, topSongs, topArtists, topAlbums, byHour, recentPlays, streakDays, longestStreak, bars, since}."""
+        """Listening totals and streak data, including streakActiveToday."""
         if self.log is None:
             return {
                 "plays": 0, "minutes": 0, "songs": 0, "artists": 0,
                 "topSongs": [], "topArtists": [], "topAlbums": [],
                 "byHour": [{"hour": h, "plays": 0, "minutes": 0} for h in range(24)],
-                "recentPlays": [], "streakDays": 0, "longestStreak": 0, "bars": [], "since": "",
+                "recentPlays": [], "streakDays": 0, "longestStreak": 0, "streakActiveToday": False,
+                "bars": [], "since": "",
             }
         period = period if period in PERIODS else "month"
         data = self.log.summary(period_start(period), "month" if period in ("year", "all") else "day")
         first = self.log.first_play()
         data["bars"] = bars(data.pop("per"), period, first=first)
-        cur_streak, best_streak = self.log.streaks()
+        cur_streak, best_streak, active_today = self.log.streak_status()
         data["streakDays"] = cur_streak
         data["longestStreak"] = best_streak
+        data["streakActiveToday"] = active_today
         data["since"] = (datetime.date.fromtimestamp(first).isoformat() if first else "")
         return data
 
@@ -231,6 +299,7 @@ class Stats(QObject):
         self.player.playUris([t["uri"] for t in tracks], index)
 
     def close(self):
+        self._midnight.stop()
         if self.log is not None:
             self.log.close()
 

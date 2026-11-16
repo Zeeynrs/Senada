@@ -86,7 +86,7 @@ Instalasi, fitur, impor playlist, privasi, pemecahan masalah, dan pengembangan.
 - **Discord Rich Presence** (optional): "Listening to Senada" with the song, cover and a progress bar on your profile.
 - **Scrobbling** to Libre.fm (and Last.fm) from *Settings → Scrobbling*.
 - **Phone remote**: scan a QR code in *Settings → Phone remote* and control Senada from your phone's browser on the same Wi-Fi.
-- **Your stats**: minutes listened, top songs and artists, per day or month, counted on this device only.
+- **Your stats**: minutes listened, top songs and artists, per day or month, counted on this device only. The daily streak has a glowing vinyl emblem that evolves at **1, 7, 30, 100, 200 and 500 days**. It lights up after a qualifying listen today (30 seconds, or half of a shorter song), including while the song is still playing. Until then it stays dormant, even if yesterday's streak is still connected. Your personal best and next evolution are shown beside it.
 
 </details>
 
@@ -404,7 +404,7 @@ Senada stands on great free software and services: [mpv](https://mpv.io), [yt-dl
 - **Discord Rich Presence** (opsional): "Listening to Senada" beserta lagu, sampul, dan bilah progres di profilmu.
 - **Scrobbling** ke Libre.fm (dan Last.fm) dari *Pengaturan → Scrobbling*.
 - **Remote HP**: scan kode QR di *Pengaturan → Remote HP* dan kontrol Senada dari browser HP di Wi-Fi yang sama.
-- **Statistikmu**: menit mendengarkan, lagu dan artis teratas, per hari atau per bulan, dihitung di perangkat ini saja.
+- **Statistikmu**: menit mendengarkan, lagu dan artis teratas, per hari atau per bulan, dihitung di perangkat ini saja. Streak harian memiliki lambang piringan hitam berpijar yang berevolusi pada **1, 7, 30, 100, 200, dan 500 hari**. Lambang menyala setelah mendengarkan hari ini memenuhi syarat (30 detik, atau separuh lagu pendek), termasuk saat lagu masih diputar. Sebelumnya lambang tetap redup, meskipun streak kemarin masih tersambung. Rekor dan evolusi berikutnya ditampilkan di sampingnya.
 
 </details>
 

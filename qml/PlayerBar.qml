@@ -7,6 +7,7 @@ import QtQuick.Effects
 // middle, and lyrics / queue panel toggles, devices, volume and full screen on the right.
 Rectangle {
     id: bar
+    objectName: "playerBar"
     property string panel: ""            // which right panel is open
     property bool floating: false        // a rounded card above the bottom edge (AppShell draws its shadow)
     signal openImmersive()
@@ -116,6 +117,7 @@ Rectangle {
 
     // ---- now playing ------------------------------------------------------------------
     RowLayout {
+        id: nowPlaying
         anchors.left: parent.left
         anchors.leftMargin: 14
         anchors.verticalCenter: parent.verticalCenter
@@ -191,9 +193,14 @@ Rectangle {
 
     // ---- transport + seek ------------------------------------------------------------
     ColumnLayout {
+        objectName: "playerTransport"
         anchors.horizontalCenter: parent.horizontalCenter
+        // Give the right-hand tools breathing room at the minimum window size.
+        // Keep the usual centered transport whenever it fits between the sides.
+        anchors.horizontalCenterOffset: Math.min(0, tools.x - 16 - (bar.width + width) / 2)
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(bar.width * 0.38, 520)
+        width: Math.min(bar.width * 0.38, 520,
+                        Math.max(230, tools.x - nowPlaying.x - nowPlaying.width - 32))
         spacing: 2
 
         Row {
@@ -340,88 +347,154 @@ Rectangle {
         }
     }
 
-    // ---- panels, devices, volume, full screen ----------------------------------------------
+    // ---- frequent controls, with secondary actions in More --------------------------------
     Row {
+        id: tools
+        objectName: "playerTools"
         anchors.right: parent.right
         anchors.rightMargin: 14
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 2
+        spacing: 8
 
-        IconButton {
+        Row {
             anchors.verticalCenter: parent.verticalCenter
-            iconName: "lyrics"; size: 18; tint: Theme.dim
-            active: bar.panel === "lyrics"
-            tip: I18n.t("Lyrics")
-            onClicked: bar.showPanel("lyrics")
+            spacing: 4
+            IconButton {
+                iconName: "lyrics"; size: 18; tint: Theme.dim
+                active: bar.panel === "lyrics"
+                tip: I18n.t("Lyrics")
+                onClicked: bar.showPanel("lyrics")
+            }
+            IconButton {
+                iconName: "queue"; size: 18; tint: Theme.dim
+                active: bar.panel === "queue"
+                tip: I18n.t("Queue")
+                onClicked: bar.showPanel("queue")
+            }
+        }
+        Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1; height: 20
+            color: Theme.line
+        }
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            IconButton {
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: bar.volume === 0 ? "volume-off" : "volume"
+                size: 18; tint: Theme.dim
+                tip: bar.volume === 0 ? I18n.t("Unmute") : I18n.t("Mute")
+                onClicked: {
+                    if (bar.volume > 0) { bar.lastVolume = bar.volume; player.setVolume(0) }
+                    else player.setVolume(bar.lastVolume || 50)
+                }
+            }
+            NSlider {
+                objectName: "playerVolume"
+                anchors.verticalCenter: parent.verticalCenter
+                width: bar.roomy ? 110 : 76
+                from: 0; to: 100
+                value: bar.volume
+                onMoved: player.setVolume(Math.round(value))
+                WheelHandler {
+                    onWheel: (event) => player.setVolume(Math.max(0, Math.min(100, bar.volume + (event.angleDelta.y > 0 ? 2 : -2))))
+                }
+                ToolTip.visible: hovered
+                ToolTip.text: "Volume " + bar.volume + "%"
+                ToolTip.delay: 300
+            }
         }
         IconButton {
+            id: moreButton
             anchors.verticalCenter: parent.verticalCenter
-            iconName: "queue"; size: 18; tint: Theme.dim
-            active: bar.panel === "queue"
-            tip: I18n.t("Queue")
-            onClicked: bar.showPanel("queue")
-        }
-        SleepTimerButton {
-            anchors.verticalCenter: parent.verticalCenter
-            visible: bar.roomy || running  // a running timer stays in sight on a narrow window
-        }
-        IconButton {
-            id: eqButton
-            anchors.verticalCenter: parent.verticalCenter
-            visible: bar.roomy
-            iconName: "equalizer"; size: 18; tint: Theme.dim
-            active: !!effects && effects.enabled
-            tip: I18n.t("Equalizer & Audio Effects")
-            onClicked: eqPopup.opened ? eqPopup.close() : eqPopup.open()
+            iconName: "more"; size: 18; tint: Theme.dim
+            active: sleepControl.running
+            focusPolicy: Qt.TabFocus
+            Accessible.name: I18n.t("More controls")
+            tip: I18n.t("More controls") + (sleepControl.running ? "\n" + sleepControl.tip : "")
+            onClicked: moreMenu.opened ? moreMenu.close()
+                : moreMenu.popup(moreButton, moreButton.width - moreMenu.implicitWidth, -moreMenu.implicitHeight - 12)
+
+            NMenu {
+                id: moreMenu
+                objectName: "playerMoreMenu"
+                implicitWidth: 250
+                component ToolMenuItem: MenuItem {
+                    id: toolItem
+                    property string glyph
+                    implicitHeight: 40
+                    leftPadding: 12
+                    rightPadding: 12
+                    topPadding: 8
+                    bottomPadding: 8
+
+                    contentItem: RowLayout {
+                        spacing: 12
+                        Item {
+                            Layout.preferredWidth: 20
+                            Layout.preferredHeight: 20
+                            Icon {
+                                anchors.centerIn: parent
+                                glyph: toolItem.glyph
+                                size: 18
+                                color: !toolItem.enabled ? Theme.faint : toolItem.highlighted ? Theme.text : Theme.dim
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: toolItem.text.replace(/&&/g, "&")
+                            textFormat: Text.PlainText
+                            font.pixelSize: 13
+                            color: toolItem.enabled ? Theme.text : Theme.faint
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: toolItem.down ? Theme.pressed : toolItem.highlighted ? Theme.hover : "transparent"
+                    }
+                }
+                ToolMenuItem {
+                    glyph: "sleep"
+                    text: sleepControl.tip
+                    onTriggered: Qt.callLater(() => sleepControl.openMenu(moreButton))
+                }
+                ToolMenuItem {
+                    glyph: "equalizer"
+                    text: I18n.t("Equalizer & Audio Effects").replace(/&/g, "&&")
+                    onTriggered: Qt.callLater(() => eqPopup.open())
+                }
+                ToolMenuItem {
+                    glyph: "devices"
+                    text: I18n.t("Devices")
+                    onTriggered: Qt.callLater(() => devices.open())
+                }
+                ToolMenuItem {
+                    glyph: "mini-player"
+                    text: I18n.t("Mini player (Ctrl+M)")
+                    enabled: bar.hasTrack
+                    onTriggered: Qt.callLater(() => bar.openMiniPlayer())
+                }
+            }
+            SleepTimerButton {
+                id: sleepControl
+                visible: false
+            }
             AudioQuickPopup {
                 id: eqPopup
-                x: eqButton.width - width
+                objectName: "playerAudioPopup"
+                x: moreButton.width - width
                 y: -height - 12
             }
-        }
-        IconButton {
-            id: devButton
-            anchors.verticalCenter: parent.verticalCenter
-            visible: bar.roomy
-            iconName: "devices"; size: 18; tint: Theme.dim
-            tip: I18n.t("Devices")
-            active: !!bar.s.deviceId && bar.s.deviceId !== "local" && bar.s.deviceId !== "auto"
-            onClicked: devices.opened ? devices.close() : devices.open()
             DevicesPopup {
                 id: devices
-                x: devButton.width - width
+                objectName: "playerDevicesPopup"
+                maxPopupHeight: Math.max(200, bar.Window.window ? bar.Window.window.height - bar.height - 48 : 560)
+                x: moreButton.width - width
                 y: -height - 12
             }
-        }
-        IconButton {
-            anchors.verticalCenter: parent.verticalCenter
-            iconName: bar.volume === 0 ? "volume-off" : "volume"
-            size: 18; tint: Theme.dim
-            tip: bar.volume === 0 ? I18n.t("Unmute") : I18n.t("Mute")
-            onClicked: {
-                if (bar.volume > 0) { bar.lastVolume = bar.volume; player.setVolume(0) }
-                else player.setVolume(bar.lastVolume || 50)
-            }
-        }
-        NSlider {
-            anchors.verticalCenter: parent.verticalCenter
-            width: bar.roomy ? 110 : 76
-            from: 0; to: 100
-            value: bar.volume
-            onMoved: player.setVolume(Math.round(value))
-            WheelHandler {
-                onWheel: (event) => player.setVolume(Math.max(0, Math.min(100, bar.volume + (event.angleDelta.y > 0 ? 2 : -2))))
-            }
-            ToolTip.visible: hovered
-            ToolTip.text: "Volume " + bar.volume + "%"
-            ToolTip.delay: 300
-        }
-        IconButton {
-            anchors.verticalCenter: parent.verticalCenter
-            iconName: "mini-player"; size: 18; tint: Theme.dim
-            enabled: bar.hasTrack
-            tip: I18n.t("Mini player (Ctrl+M)")
-            onClicked: bar.openMiniPlayer()
         }
         IconButton {
             anchors.verticalCenter: parent.verticalCenter

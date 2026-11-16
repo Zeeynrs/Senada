@@ -3,6 +3,8 @@ __pycache__/
 *$py.class
 .venv/
 .cache/
+# Local brainstorming previews and render probes
+.superpowers/
 *.sock
 *.tmp
 src/

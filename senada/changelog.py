@@ -14,6 +14,12 @@ CHANGELOG = [
             "new": [
                 "Liquid Glass is temporarily disabled while it is being reworked. Existing Liquid Glass "
                 "preferences use the standard appearance; Album cover and Transparent remain available.",
+                "A simpler player bar: Lyrics, Queue, volume and Full screen stay visible; Sleep timer, "
+                "Equalizer & Audio Effects, Devices and Mini player move into More controls. An active sleep "
+                "timer is indicated on the More controls button.",
+                "A musical daily streak: an original glowing vinyl emblem evolves at 1, 7, 30, 100, 200 and "
+                "500 days. It stays dormant until today's listening qualifies, lights up during playback, "
+                "and shows your best streak and next evolution. Listening days are kept on this device.",
             ],
             "fixed": [],
         },
@@ -21,6 +27,13 @@ CHANGELOG = [
             "new": [
                 "Liquid Glass dinonaktifkan sementara dan sedang dikembangkan ulang. Pengaturan Liquid Glass "
                 "yang sudah tersimpan memakai tampilan standar; Sampul album dan Transparan tetap tersedia.",
+                "Bilah pemutar lebih ringkas: Lirik, Antrean, volume, dan Layar penuh tetap terlihat; Timer tidur, "
+                "Equalizer & Efek Audio, Perangkat, serta Pemutar mini masuk ke Kontrol lainnya. Timer tidur "
+                "yang aktif ditandai pada tombol Kontrol lainnya.",
+                "Streak harian bertema musik: lambang piringan hitam berpijar berevolusi pada 1, 7, 30, 100, "
+                "200, dan 500 hari. Lambang tetap redup sampai musik hari ini memenuhi syarat, menyala saat "
+                "lagu masih diputar, serta menampilkan rekor dan evolusi berikutnya. Hari mendengarkan "
+                "tersimpan di perangkat ini.",
             ],
             "fixed": [],
         },

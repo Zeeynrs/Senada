@@ -78,10 +78,15 @@ Item {
                         Layout.fillWidth: true
                         text: I18n.t("Your stats")
                         font.pixelSize: 34; font.weight: Font.Black; font.letterSpacing: -0.6
+                        elide: Text.ElideRight
                     }
                     NButton {
                         iconName: "share"
-                        text: I18n.t("Share stats")
+                        text: page.width < 500 ? "" : I18n.t("Share stats")
+                        Accessible.name: I18n.t("Share stats")
+                        ToolTip.visible: hovered
+                        ToolTip.text: I18n.t("Share stats")
+                        ToolTip.delay: 600
                         enabled: (page.info.plays || 0) > 0
                         onClicked: shareStatsDialog.openWith(page.info, page.period)
                     }
@@ -111,22 +116,24 @@ Item {
                 }
             }
 
-            // ---- the totals ---------------------------------------------------------------
-            RowLayout {
+            StreakCard {
                 width: parent.width
-                spacing: 14
+                days: page.info.streakDays || 0
+                best: page.info.longestStreak || 0
+                activeToday: !!page.info.streakActiveToday
+            }
+
+            // ---- the totals ---------------------------------------------------------------
+            GridLayout {
+                width: parent.width
+                columns: width < 520 ? 2 : 4
+                columnSpacing: 14
+                rowSpacing: 14
+                uniformCellWidths: true
                 Tile { value: page.minutesText(page.info.minutes || 0); label: I18n.t("listened") }
                 Tile { value: String(page.info.plays || 0); label: I18n.t("plays") }
                 Tile { value: String(page.info.songs || 0); label: I18n.t("different songs") }
                 Tile { value: String(page.info.artists || 0); label: I18n.t("artists") }
-                Tile {
-                    value: (page.info.streakDays || 0) > 0
-                           ? I18n.n("{n} day", "{n} days", page.info.streakDays || 0)
-                           : "0"
-                    label: (page.info.longestStreak || 0) > (page.info.streakDays || 0)
-                           ? I18n.t("streak · best {n}d", { n: page.info.longestStreak || 0 })
-                           : I18n.t("daily streak")
-                }
             }
 
             // ---- minutes per day / month ---------------------------------------------------

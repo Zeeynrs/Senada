@@ -4,7 +4,9 @@ import QtQuick.Layouts
 
 Popup {
     id: p
+    property real maxPopupHeight: 560
     width: 340
+    height: Math.min(implicitHeight, maxPopupHeight)
     padding: 14
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -38,11 +40,19 @@ Popup {
             IconButton { iconName: "refresh"; size: 18; tip: I18n.t("Reload"); onClicked: player.refreshDevices() }
         }
 
-        Repeater {
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: Math.min(108, contentHeight)
+            implicitHeight: contentHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
             model: player.devices
-            AbstractButton {
+            ScrollBar.vertical: NScrollBar {}
+            delegate: AbstractButton {
                 id: d
-                Layout.fillWidth: true
+                required property var modelData
+                width: ListView.view ? ListView.view.width : p.availableWidth
                 implicitHeight: 54
                 hoverEnabled: true
                 focusPolicy: Qt.NoFocus

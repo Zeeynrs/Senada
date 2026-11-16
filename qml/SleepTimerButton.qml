@@ -23,10 +23,11 @@ IconButton {
     tip: timer.mode === "track" ? I18n.t("Sleep timer: stops after this song")
        : timer.mode === "time" ? I18n.t("Sleep timer: {time} left", { time: minutesText(minutesLeft) })
        : I18n.t("Sleep timer")
-    onClicked: {
+    function openMenu(anchor) {
         now = Date.now()
-        menu.popup(sb, sb.width - menu.implicitWidth, -menu.implicitHeight - 10)
+        menu.popup(anchor, anchor.width - menu.implicitWidth, -menu.implicitHeight - 10)
     }
+    onClicked: openMenu(sb)
 
     Timer {
         running: sb.timer.mode === "time"
