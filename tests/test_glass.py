@@ -31,35 +31,48 @@ class GlassPreferences(unittest.TestCase):
         self.addCleanup(theme.stop)
         self.worker = Worker()
 
-    def test_liquid_preference_survives_restart_with_opacity_and_color_mode(self):
-        session = Session(Settings(), self.worker)
-        session.glassMode = "liquid"
+    def test_saved_liquid_falls_back_to_off_without_losing_other_preferences(self):
+        settings = Settings()
+        settings["glass"] = "liquid"  # saved by an earlier release
+        session = Session(settings, self.worker)
+        self.assertEqual(session.glassMode, "off")
         session.glassOpacity = 0.48
         session.themeMode = "light"
         again = Session(Settings(), self.worker)
-        self.assertEqual(again.glassMode, "liquid")
+        self.assertEqual(again.glassMode, "off")
         self.assertEqual(again.glassOpacity, 0.48)
         self.assertEqual(again.themeMode, "light")
 
-    def test_switching_from_desktop_to_liquid_disables_native_backdrop(self):
-        session = Session(Settings(), self.worker)
+    def test_saved_liquid_does_not_enable_native_backdrop(self):
+        settings = Settings()
+        settings["glass"] = "liquid"
+        session = Session(settings, self.worker)
         window = QObject()
         with patch("senada.window_effects.apply_backdrop") as apply:
             session.set_window(window)
+            self.assertEqual(session.glassMode, "off")
+            apply.assert_called_with(window, False, "system")
             session.glassMode = "desktop"
             apply.assert_called_with(window, True, "system")
-            session.glassMode = "liquid"
-            self.assertEqual(session.glassMode, "liquid")
+            session.glassMode = "off"
             apply.assert_called_with(window, False, "system")
 
-    def test_old_modes_and_invalid_values_after_liquid(self):
+    def test_liquid_cannot_be_selected_while_under_redevelopment(self):
         session = Session(Settings(), self.worker)
-        session.glassMode = "liquid"
-        session.glassMode = "invalid"
-        self.assertEqual(session.glassMode, "liquid")
-        for mode in ("off", "cover", "desktop", "liquid", "off"):
+        for mode in ("off", "cover", "desktop"):
             session.glassMode = mode
+            session.glassMode = "liquid"
             self.assertEqual(session.glassMode, mode)
+            self.assertEqual(Session(Settings(), self.worker).glassMode, mode)
+
+    def test_old_saved_liquid_can_be_replaced_with_an_available_mode(self):
+        settings = Settings()
+        settings["glass"] = "liquid"
+        session = Session(settings, self.worker)
+        session.glassMode = "cover"
+        self.assertEqual(Session(Settings(), self.worker).glassMode, "cover")
+        session.glassMode = "invalid"
+        self.assertEqual(session.glassMode, "cover")
 
     def test_unknown_saved_mode_falls_back_to_off(self):
         settings = Settings()

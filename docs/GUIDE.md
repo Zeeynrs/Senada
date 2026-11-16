@@ -76,7 +76,7 @@ Instalasi, fitur, impor playlist, privasi, pemecahan masalah, dan pengembangan.
 - **Full-screen player** in four styles: round cover inside a circular visualizer (*cava*), a spinning **vinyl record** with a tonearm, a magazine **poster**, or a **cinema** screen with the lyrics as subtitles.
 - **Seek bar styles**: a line, a wave, a waveform or dots.
 - **Mini player** in four styles: classic, sound wave, running lyrics or cover glass; it tucks into the top edge after a while (5–15 s, or never).
-- **Glass effect** (optional): **Liquid Glass** adds rounded panels, soft edge refraction, highlights and a floating player. Choose it in *Settings → Appearance → Glass effect*; adjust *Glass thickness* for transparency. It follows album artwork, with ambient colors when idle, and supports light/dark mode. Software rendering uses a simpler translucent material. *Album cover* and *Transparent* (acrylic on Windows 11, blur on Hyprland / KDE) are also available.
+- **Glass effect** (optional): choose *Album cover* or *Transparent* (acrylic on Windows 11, blur on Hyprland / KDE) in *Settings → Appearance → Glass effect*. **Liquid Glass is temporarily disabled while it is being reworked**; saved Liquid Glass preferences use the standard appearance.
 - Settings with search, and a **What's new** page with the changes in each release.
 
 **🖥️ Fits your desktop**
@@ -394,7 +394,7 @@ Senada stands on great free software and services: [mpv](https://mpv.io), [yt-dl
 - **Player layar penuh** dengan empat gaya: sampul bulat di tengah visualizer melingkar (*cava*), **piringan hitam** yang berputar dengan lengan jarum, **poster** majalah, atau **layar bioskop** dengan lirik sebagai subtitle.
 - **Gaya bilah progres**: garis, gelombang, bentuk gelombang, atau titik-titik.
 - **Pemutar mini** dengan empat gaya: klasik, gelombang suara, lirik berjalan, atau kaca sampul; setelah beberapa saat (5–15 detik, atau tidak pernah) ia terselip di tepi atas layar.
-- **Efek kaca** (opsional): **Liquid Glass** menghadirkan panel membulat, pembiasan lembut di tepi, kilau, dan pemutar mengambang. Aktifkan di *Pengaturan → Tampilan → Efek kaca*, lalu atur *Ketebalan kaca*. Mendukung mode terang/gelap, mengikuti sampul album, dan memakai warna latar lembut saat belum ada lagu. Renderer software memakai material transparan yang lebih sederhana. *Sampul album* dan *Transparan* (acrylic di Windows 11, blur di Hyprland / KDE) juga tersedia.
+- **Efek kaca** (opsional): pilih *Sampul album* atau *Transparan* (acrylic di Windows 11, blur di Hyprland / KDE) di *Pengaturan → Tampilan → Efek kaca*. **Liquid Glass dinonaktifkan sementara dan sedang dikembangkan ulang**; pengaturan Liquid Glass yang sudah tersimpan memakai tampilan standar.
 - Pengaturan dengan kolom cari, dan halaman **Apa yang baru** berisi perubahan di setiap rilis.
 
 **🖥️ Menyatu dengan desktop**

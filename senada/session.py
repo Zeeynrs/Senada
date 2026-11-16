@@ -91,7 +91,9 @@ class Session(QObject):
 
     # ---- glass ("liquid glass") look -------------------------------------------
 
-    GLASS_MODES = ("off", "cover", "desktop", "liquid")
+    # Liquid Glass is temporarily disabled while its material is reworked.
+    # Saved "liquid" preferences resolve to "off" through the getter below.
+    GLASS_MODES = ("off", "cover", "desktop")
 
     def set_window(self, window):
         """The main window, so the native see-through backdrop can follow the setting."""

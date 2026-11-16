@@ -51,6 +51,7 @@ ID = {
     "Light": "Terang",
     "Glass effect": "Efek kaca",
     "Liquid Glass": "Liquid Glass",
+    "Liquid Glass is temporarily disabled while it is being reworked.": "Liquid Glass dinonaktifkan sementara dan sedang dikembangkan ulang.",
     "Rounded glass panels with soft refraction, luminous edges and a floating player. Follows the album artwork, with ambient colors when nothing is playing.": "Panel kaca membulat dengan pembiasan lembut, tepi berkilau, dan pemutar mengambang. Mengikuti sampul album, dengan warna latar lembut saat belum ada lagu diputar.",
     "Liquid Glass uses a floating player. Your player bar choice returns with the other glass modes.": "Liquid Glass memakai pemutar mengambang. Pilihan bilah pemutarmu kembali saat memakai mode kaca lainnya.",
     "See-through window. The blur behind it comes from the system: acrylic on Windows 11, blur on Windows 10, Hyprland blur or the KDE blur effect. Without a compositor the background can turn black.": "Jendela tembus pandang. Blur di belakangnya dibuat sistem: acrylic di Windows 11, blur di Windows 10, blur Hyprland, atau efek blur KDE. Tanpa compositor, latarnya bisa jadi hitam.",

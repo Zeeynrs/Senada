@@ -935,17 +935,15 @@ Popup {
             Divider {}
             SettingRow {
                 label: I18n.t("Glass effect")
-                hint: session.glassMode === "liquid"
-                      ? I18n.t("Rounded glass panels with soft refraction, luminous edges and a floating player. Follows the album artwork, with ambient colors when nothing is playing.")
-                      : session.glassMode === "desktop"
+                hint: (session.glassMode === "desktop"
                       ? I18n.t("See-through window. The blur behind it comes from the system: acrylic on Windows 11, blur on Windows 10, Hyprland blur or the KDE blur effect. Without a compositor the background can turn black.")
                       : session.glassMode === "cover"
                       ? I18n.t("See-through panels over the blurred cover of the song. Works on every system.")
-                      : I18n.t("Panels are not see-through.")
+                      : I18n.t("Panels are not see-through."))
+                      + "\n" + I18n.t("Liquid Glass is temporarily disabled while it is being reworked.")
                 NCombo {
                     model: [
                         { key: "off", label: I18n.t("Off") },
-                        { key: "liquid", label: I18n.t("Liquid Glass") },
                         { key: "cover", label: I18n.t("Album cover") },
                         { key: "desktop", label: I18n.t("Transparent") }
                     ]

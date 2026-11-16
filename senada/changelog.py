@@ -10,8 +10,20 @@ CHANGELOG = [
     {
         "version": "next",
         "date": "",
-        "en": {"new": [], "fixed": []},
-        "id": {"new": [], "fixed": []},
+        "en": {
+            "new": [
+                "Liquid Glass is temporarily disabled while it is being reworked. Existing Liquid Glass "
+                "preferences use the standard appearance; Album cover and Transparent remain available.",
+            ],
+            "fixed": [],
+        },
+        "id": {
+            "new": [
+                "Liquid Glass dinonaktifkan sementara dan sedang dikembangkan ulang. Pengaturan Liquid Glass "
+                "yang sudah tersimpan memakai tampilan standar; Sampul album dan Transparan tetap tersedia.",
+            ],
+            "fixed": [],
+        },
     },
     {
         "version": "1.1.0",

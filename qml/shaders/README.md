@@ -1,5 +1,8 @@
 # Liquid Glass shader
 
+Liquid Glass is temporarily disabled in the application while it is being reworked.
+The components, shader and rendering tests are retained for further development.
+
 `liquid-glass.frag` is an original native implementation inspired by the optical
 effects in [LiquidGlass](https://github.com/ybouane/liquidglass). It samples only
 Senada's shared decorative backdrop. Text and controls are rendered normally.
