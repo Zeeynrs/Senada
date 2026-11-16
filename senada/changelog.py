@@ -10,6 +10,12 @@ CHANGELOG = [
     {
         "version": "next",
         "date": "",
+        "en": {"new": [], "fixed": []},
+        "id": {"new": [], "fixed": []},
+    },
+    {
+        "version": "1.1.1",
+        "date": "2026-11-16",
         "en": {
             "new": [
                 "Liquid Glass is temporarily disabled while it is being reworked. Existing Liquid Glass "
@@ -21,7 +27,13 @@ CHANGELOG = [
                 "500 days. It stays dormant until today's listening qualifies, lights up during playback, "
                 "and shows your best streak and next evolution. Listening days are kept on this device.",
             ],
-            "fixed": [],
+            "fixed": [
+                "The player controls stay clear of the transport on smaller windows. Menu items have "
+                "consistent icons, padding and spacing.",
+                "Long lists of audio outputs scroll inside the device popup instead of extending beyond "
+                "the window.",
+                "The Stats page uses a compact Share button and a two-column totals layout on narrow windows.",
+            ],
         },
         "id": {
             "new": [
@@ -35,7 +47,12 @@ CHANGELOG = [
                 "lagu masih diputar, serta menampilkan rekor dan evolusi berikutnya. Hari mendengarkan "
                 "tersimpan di perangkat ini.",
             ],
-            "fixed": [],
+            "fixed": [
+                "Kontrol player tidak bertumpuk dengan tombol pemutaran pada jendela kecil. Ikon, padding, "
+                "dan jarak item menu dibuat seragam.",
+                "Daftar output audio yang panjang bisa digulir dalam popup perangkat, tanpa keluar dari jendela.",
+                "Halaman Statistik memakai tombol Bagikan yang ringkas dan dua kolom ringkasan pada jendela sempit.",
+            ],
         },
     },
     {
