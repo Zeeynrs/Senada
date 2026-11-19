@@ -63,6 +63,7 @@ ApplicationWindow {
 
     // ---- mini player ("dynamic island") while minimized ----------------------------------
     property bool miniMode: false
+    property bool miniExpanded: false
     property bool wasMaximized: false
     readonly property bool hidesToMini: Qt.platform.pluginName.indexOf("wayland") === 0
 
@@ -131,20 +132,19 @@ ApplicationWindow {
         ignoreUnknownSignals: true
         function onShowWindow() { win.showFromTray() }
     }
-    onMiniModeChanged: {
-        if (miniMode) {
-            mini.place(win.screen)
-            mini.show()
-        } else {
-            mini.hide()
+    Loader {
+        active: win.miniMode
+        onLoaded: {
+            item.expanded = win.miniExpanded
+            item.place(win.screen)
+            item.show()
         }
-    }
-    MiniPlayer {
-        id: mini
-        onRestore: win.leaveMiniPlayer()
-        // closed from the compositor: the main window comes back (refusing the close
-        // would also refuse Qt.quit())
-        onVisibleChanged: if (!visible && win.miniMode) win.leaveMiniPlayer()
+        sourceComponent: MiniPlayer {
+            onExpandedChanged: win.miniExpanded = expanded
+            onRestore: win.leaveMiniPlayer()
+            // A compositor close restores the main window and releases the mini player.
+            onVisibleChanged: if (!visible && win.miniMode) win.leaveMiniPlayer()
+        }
     }
 
     // no account needed: the app opens straight into the library

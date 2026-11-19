@@ -100,9 +100,36 @@ class Crossfade(unittest.TestCase):
 
     def test_turning_it_off_hands_the_next_song_back_to_mpv(self):
         self.xf.set_crossfade(4)
+        spare = self.made[1]
         self.xf.queue_next("song2")
         self.xf.set_crossfade(0)
         self.assertEqual(self.a.did("queue_next")[-1], ("queue_next", "song2"))
+        self.assertEqual(spare.did("quit"), [("quit",)])
+        self.assertEqual(self.a.did("quit"), [])
+
+    def test_turning_it_off_during_overlap_retires_the_outgoing_mpv_after_the_fade(self):
+        self.xf.set_crossfade(4)
+        active = self.made[1]
+        self.xf.queue_next("song2")
+        self.a.positionChanged.emit(197_000)
+        self.xf.play("song2")
+        self.xf.queue_next("song3")
+        self.xf.set_crossfade(0)
+        self.xf._on_fade()
+        self.assertEqual(self.a.did("quit"), [])
+        self.assertEqual(active.did("queue_next")[-1], ("queue_next", "song3"))
+
+        for _ in range(79):
+            self.xf._on_fade()
+        self.assertEqual(self.a.did("quit"), [("quit",)])
+        self.assertEqual(active.did("quit"), [])
+        self.assertEqual(active.did("set_volume")[-1], ("set_volume", 80))
+
+        self.xf.set_crossfade(4)
+        replacement = self.made[2]
+        self.assertNotEqual(replacement.tag, active.tag)
+        active.positionChanged.emit(197_000)
+        self.assertEqual(replacement.did("play"), [("play", "song3")])
 
 
 class Setting(unittest.TestCase):

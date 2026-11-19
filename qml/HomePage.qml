@@ -7,6 +7,8 @@ Item {
     readonly property string pageKey: "home"
     readonly property var home: library.home
     readonly property var sections: home.sections || []
+    property var expandedShelves: Object.create(null)
+    property var carouselOffsets: Object.create(null)
     readonly property bool wide: width > 1000
     readonly property bool compactGlass: Theme.liquid && width < 440
     readonly property var liked: (library.likedRevision, library.likedPreview)
@@ -14,21 +16,27 @@ Item {
     readonly property bool live: !!player.state.hasTrack
     readonly property var resume: live ? player.state : (library.recent.length > 0 ? library.recent[0] : null)
 
-    Flickable {
+    ListView {
         id: flick
         SmoothScroll { flickable: flick }
         anchors.fill: parent
-        contentHeight: col.implicitHeight + Theme.dockSpace + 24
+        model: page.sections
+        topMargin: 24
+        bottomMargin: Theme.dockSpace + 24
+        spacing: 28
+        cacheBuffer: 240
+        keyNavigationEnabled: false
+        currentIndex: -1
+        onCountChanged: currentIndex = -1
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: NScrollBar {}
 
-        Column {
-            id: col
+        header: Column {
             x: 28
-            y: 24
             width: flick.width - 56
             spacing: 28
+            bottomPadding: page.sections.length > 0 ? spacing : 0
 
             // ---- title + stats --------------------------------------------------------
             Column {
@@ -250,24 +258,30 @@ Item {
                     onClicked: library.refreshAll()
                 }
             }
+        }
 
-            Repeater {
-                model: page.sections
-                Column {
-                    width: col.width
-                    spacing: 12
-                    TrackSection {
-                        width: parent.width
-                        wide: page.wide
-                        title: modelData.title
-                        tracks: modelData.tracks || []
-                    }
-                    Carousel {
-                        width: parent.width
-                        title: (modelData.tracks || []).length > 0 ? "" : modelData.title
-                        items: modelData.cards || []
-                    }
-                }
+        delegate: Column {
+            id: shelf
+            required property var modelData
+            readonly property string key: modelData.title
+            x: 28
+            width: flick.width - 56
+            spacing: 12
+
+            TrackSection {
+                width: parent.width
+                wide: page.wide
+                title: shelf.key
+                tracks: shelf.modelData.tracks || []
+                expanded: page.expandedShelves[shelf.key] || false
+                onExpandedChanged: page.expandedShelves[shelf.key] = expanded
+            }
+            Carousel {
+                width: parent.width
+                title: (shelf.modelData.tracks || []).length > 0 ? "" : shelf.key
+                items: shelf.modelData.cards || []
+                Component.onCompleted: scrollOffset = page.carouselOffsets[shelf.key] || 0
+                onScrollOffsetChanged: page.carouselOffsets[shelf.key] = scrollOffset
             }
         }
     }

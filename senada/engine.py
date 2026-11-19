@@ -244,8 +244,12 @@ class AudioEngine(QObject):
             f"--input-ipc-server={self.ipc_path}",
             "--ytdl=yes",
             f"--ytdl-format={format_for_quality(self._quality)}",
-            "--demuxer-max-bytes=30M",
+            # Network streams use cache-secs as well as the general readahead limit.
+            "--cache-secs=45",
             "--demuxer-readahead-secs=45",
+            "--demuxer-max-bytes=8MiB",
+            "--demuxer-max-back-bytes=2MiB",
+            "--demuxer-donate-buffer=no",
             "--audio-pitch-correction=yes",
             "--gapless-audio=weak",
             "--prefetch-playlist=yes",  # opens the queued next track while the current one is ending
@@ -353,7 +357,7 @@ class AudioEngine(QObject):
     def _fail(self, msg: str):
         logger.error(msg)
         # emitted later so the player has connected its slots by then
-        QTimer.singleShot(0, lambda: self.errorOccurred.emit(msg))
+        QTimer.singleShot(0, lambda: self.errorOccurred.emit(msg) if not self._quitting else None)
 
     # ---- position updates ------------------------------------------------------------
 
@@ -618,21 +622,34 @@ class AudioEngine(QObject):
         self.stateChanged.emit(False)
 
     def quit(self):
+        if self._quitting:
+            return
         self._quitting = True
-        if self.proc is None:
+        atexit.unregister(self.quit)
+        self._retry.stop()
+        proc = self.proc
+        if proc is None:
             return
         try:
-            self._send_command(["quit"])
-            self.sock.waitForBytesWritten(200)
-            self.sock.disconnectFromServer()
-        except RuntimeError:  # Qt object already gone at interpreter exit
+            if self.sock.state() == QLocalSocket.LocalSocketState.ConnectedState:
+                self._send_command(["quit"])
+                if self.sock.bytesToWrite():
+                    self.sock.waitForBytesWritten(200)
+                self.sock.disconnectFromServer()
+            else:
+                proc.terminate()
+        except (RuntimeError, OSError):  # the socket or process may already be gone
             pass
         try:
-            self.proc.wait(timeout=1)
+            proc.wait(timeout=1)
         except subprocess.TimeoutExpired:
-            self.proc.terminate()
+            proc.kill()
+            proc.wait()
         except OSError:
             pass
+        finally:
+            release(self._job)
+            self._job = None
         self.proc = None
         if not IS_WINDOWS and os.path.exists(self.ipc_path):
             try:

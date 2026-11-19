@@ -3,7 +3,7 @@
 One mpv plays one song at a time, so the crossfade uses a second one. CrossfadeEngine is what
 the player sees as its audio engine: it has the same methods and signals as AudioEngine and
 passes them on from whichever mpv plays the song now ("active"). With the crossfade off (the
-default) it is the first mpv alone, gapless as before, and the second mpv is never started.
+default) only the active mpv is kept, with gapless playback.
 
 With it on, the song lined up next (queue_next) is not handed to mpv's playlist; instead,
 `seconds` before the end of the song, the other mpv starts it at volume 0 and becomes the
@@ -47,17 +47,16 @@ class CrossfadeEngine(QObject):
         self._settings = {}      # the last effects, given to a second mpv when it starts
         self._fading_out = None  # the mpv being faded out
         self._fade_step = 0
+        self._fade_steps = 1
         self._fade = QTimer(self, interval=STEP_MS, timeout=self._on_fade)
 
     def _wire(self, engine):
-        for name in ("positionChanged", "durationChanged", "stateChanged", "trackEnded", "loadFailed"):
-            getattr(engine, name).connect(lambda *a, e=engine, n=name: self._from(e, n, a))
+        for name in ("positionChanged", "durationChanged", "stateChanged", "trackEnded", "loadFailed",
+                     "audioDevicesChanged", "audioDeviceChanged"):
+            signal = getattr(engine, name, None)
+            if signal is not None:
+                signal.connect(lambda *a, e=engine, n=name: self._from(e, n, a))
         engine.errorOccurred.connect(self.errorOccurred)
-        if not getattr(self, "_engines", None):
-            if hasattr(engine, "audioDevicesChanged"):
-                engine.audioDevicesChanged.connect(self.audioDevicesChanged)
-            if hasattr(engine, "audioDeviceChanged"):
-                engine.audioDeviceChanged.connect(self.audioDeviceChanged)
         return engine
 
     def _from(self, engine, name, args):
@@ -82,17 +81,28 @@ class CrossfadeEngine(QObject):
         if seconds:
             self._other()  # the second mpv starts now, so it is ready by the first fade
             self._active.queue_next("")  # the next song waits here instead of in mpv's playlist
-        elif self._next:
-            self._active.queue_next(self._next)
+        else:
+            if self._next:
+                self._active.queue_next(self._next)
+            if self._fading_out is None:
+                self._retire_spare()
 
     def _other(self):
         if len(self._engines) < 2:
-            other = self._wire(self._make("b"))
+            tag = "" if self._active.tag == "b" else "b"
+            other = self._wire(self._make(tag))
             for method, args in self._settings.items():
                 getattr(other, method)(*args)
             other.set_volume(0)
             self._engines.append(other)
         return self._engines[1] if self._active is self._engines[0] else self._engines[0]
+
+    def _retire_spare(self):
+        if len(self._engines) == 2:
+            spare = self._other()
+            self._engines.remove(spare)
+            spare.quit()
+            spare.deleteLater()
 
     def _check_fade(self, pos_ms) -> bool:
         """Start the crossfade when the song is that close to its end; True if it started."""
@@ -113,14 +123,14 @@ class CrossfadeEngine(QObject):
         self._active = new
         self._fading_out = old
         self._fade_step = 0
+        self._fade_steps = fade_ms // STEP_MS
         self._fade.start()
         self.trackEnded.emit()   # the player moves on; its play(url) finds the song started
         return True
 
     def _on_fade(self):
-        steps = max(1, self._seconds * 1000 // STEP_MS)
         self._fade_step += 1
-        t = min(1.0, self._fade_step / steps)
+        t = min(1.0, self._fade_step / self._fade_steps)
         if self._fading_out is not None:
             self._fading_out.set_volume(round(self._volume * (1 - t)))
         self._active.set_volume(round(self._volume * t))
@@ -130,9 +140,12 @@ class CrossfadeEngine(QObject):
     def _finish_fade(self):
         self._fade.stop()
         if self._fading_out is not None:
-            self._fading_out.stop()
+            if self._seconds:
+                self._fading_out.stop()
             self._fading_out = None
         self._active.set_volume(self._volume)
+        if not self._seconds:
+            self._retire_spare()
 
     # ---- AudioEngine's methods -------------------------------------------------------------------
 
@@ -209,18 +222,19 @@ class CrossfadeEngine(QObject):
         self._broadcast("set_position_step", ms)
 
     def audio_devices(self):
-        return self._engines[0].audio_devices() if hasattr(self._engines[0], "audio_devices") else []
+        engine = self._active
+        return engine.audio_devices() if hasattr(engine, "audio_devices") else []
 
     def audio_device(self):
-        return self._engines[0].audio_device() if hasattr(self._engines[0], "audio_device") else "auto"
+        engine = self._active
+        return engine.audio_device() if hasattr(engine, "audio_device") else "auto"
 
     def set_audio_device(self, device_id):
         self._broadcast("set_audio_device", device_id)
 
     def probe_audio_devices(self):
-        if hasattr(self._engines[0], "probe_audio_devices"):
-            return self._engines[0].probe_audio_devices()
-        return []
+        engine = self._active
+        return engine.probe_audio_devices() if hasattr(engine, "probe_audio_devices") else []
 
     def set_quality(self, quality):
         self._broadcast("set_quality", quality)

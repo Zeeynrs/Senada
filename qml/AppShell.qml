@@ -9,6 +9,9 @@ Item {
     property bool immersive: false
     property bool sidebarOpen: true
     property string panel: "lyrics"   // right panel: "lyrics" | "queue" | "" (closed)
+    property string settingsSection: ""
+    property string immersivePanel: "lyrics"
+    property bool immersivePanelOpen: true
     // the player bar as a rounded card floating above the bottom edge (Settings → Appearance)
     readonly property bool floatingBar: Theme.liquid || session.playerBarStyle === "floating"
     property var forwardStack: []     // pages left with "back", for "forward"
@@ -31,14 +34,16 @@ Item {
         itemId = itemId || ""
         // Settings is a dialog over the page: the Settings button (and Ctrl+,) toggles it
         if (kind === "settings") {
-            if (settingsDialog.opened && (!itemId || itemId === settingsDialog.section))
-                settingsDialog.close()
+            settingsLoader.active = true
+            const dialog = settingsLoader.item
+            if (dialog.opened && (!itemId || itemId === dialog.section))
+                dialog.close()
             else
-                settingsDialog.openAt(itemId)
+                dialog.openAt(itemId || dialog.section)
             return
         }
-        if (settingsDialog.visible)
-            settingsDialog.close()
+        if (settingsLoader.item?.visible)
+            settingsLoader.item.close()
         immersive = false
         if (!keepForward) forwardStack = []
         if (kind === "home") {
@@ -111,7 +116,17 @@ Item {
     }
     MatchPicker { id: matchPicker }
     ShareLyricsDialog { id: shareLyricsDialog }
-    SettingsDialog { id: settingsDialog }
+    Loader {
+        id: settingsLoader
+        active: false
+        sourceComponent: SettingsDialog {
+            Component.onCompleted: if (shell.settingsSection) section = shell.settingsSection
+            onClosed: {
+                shell.settingsSection = section
+                settingsLoader.active = false
+            }
+        }
+    }
 
     // create / rename / delete an own playlist
     Popup {
@@ -297,7 +312,7 @@ Item {
         width: shell.sidebarOpen ? Theme.sidebarWidth : 0
         visible: width > 0
         currentKey: shell.currentKey
-        settingsOpen: settingsDialog.visible
+        settingsOpen: !!settingsLoader.item?.visible
         libraryFilter: shell.libraryFilter
         Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
     }
@@ -452,12 +467,34 @@ Item {
         onTapped: shell.goBack()
     }
 
-    ImmersivePlayer {
-        id: immersivePlayer
+    onImmersiveChanged: {
+        if (immersive)
+            immersiveLoader.active = true
+        const view = immersiveLoader.item
+        if (!view)
+            return
+        view.open = immersive
+        if (!immersive && !view.shown)
+            immersiveLoader.active = false
+    }
+
+    Loader {
+        id: immersiveLoader
         width: shell.width
         height: shell.height
-        open: shell.immersive
-        onClose: shell.immersive = false
+        active: false
+        sourceComponent: ImmersivePlayer {
+            panel: shell.immersivePanel
+            panelOpen: shell.immersivePanelOpen
+            onClose: shell.immersive = false
+            onShownChanged: {
+                if (!shown && !shell.immersive) {
+                    shell.immersivePanel = panel
+                    shell.immersivePanelOpen = panelOpen
+                    immersiveLoader.active = false
+                }
+            }
+        }
     }
 
     Binding {
@@ -498,6 +535,6 @@ Item {
     Shortcut { sequence: "Ctrl+M"; onActivated: shell.Window.window.enterMiniPlayer() }
     Shortcut {
         sequence: "Escape"
-        onActivated: settingsDialog.visible ? settingsDialog.close() : shell.goBack()
+        onActivated: settingsLoader.item?.visible ? settingsLoader.item.close() : shell.goBack()
     }
 }

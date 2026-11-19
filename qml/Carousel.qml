@@ -8,6 +8,7 @@ Column {
     property string subtitle
     property var items: []
     property real cardWidth: 188
+    property alias scrollOffset: list.contentX
 
     visible: items.length > 0
     spacing: 6

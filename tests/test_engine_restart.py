@@ -42,6 +42,20 @@ class DeadProcess:
         return 3
 
 
+class MpvStartup(unittest.TestCase):
+    def test_streaming_limits_both_directions_of_the_demuxer_cache(self):
+        with mock.patch("senada.engine.find_tool", return_value="mpv"), \
+                mock.patch("senada.engine.popen_tied", return_value=(None, None)) as launch, \
+                mock.patch("atexit.register"):
+            engine = AudioEngine()
+        self.addCleanup(engine.quit)
+        args = launch.call_args.args[0]
+        self.assertIn("--cache-secs=45", args)
+        self.assertIn("--demuxer-max-bytes=8MiB", args)
+        self.assertIn("--demuxer-max-back-bytes=2MiB", args)
+        self.assertIn("--demuxer-donate-buffer=no", args)
+
+
 class StoppedMpv(unittest.TestCase):
     def make(self):
         with mock.patch.object(AudioEngine, "_start_mpv"), mock.patch("atexit.register"):
