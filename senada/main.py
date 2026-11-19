@@ -136,8 +136,11 @@ def main():
     backup.restartRequested.connect(request_restart)  # restored settings apply from the next start
     updater.quitRequested.connect(session.quit)
     media_controls = None
+    wake_filter = None
 
     def on_quit():
+        if wake_filter is not None:
+            app.removeNativeEventFilter(wake_filter)
         player.save_playback_state()
         plays.flush()  # the song playing now counts too
         stats.close()
@@ -172,6 +175,10 @@ def main():
         print(f"MPRIS is off: {e}", file=sys.stderr)
         mpris = None
     if IS_WINDOWS:
+        from .power import WindowsWakeFilter
+
+        wake_filter = WindowsWakeFilter(player.on_system_resume)
+        app.installNativeEventFilter(wake_filter)
         try:
             from .smtc import MediaControls
             media_controls = MediaControls(player)

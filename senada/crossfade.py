@@ -90,12 +90,15 @@ class CrossfadeEngine(QObject):
     def _other(self):
         if len(self._engines) < 2:
             tag = "" if self._active.tag == "b" else "b"
-            other = self._wire(self._make(tag))
-            for method, args in self._settings.items():
-                getattr(other, method)(*args)
-            other.set_volume(0)
-            self._engines.append(other)
+            self._engines.append(self._new_engine(tag, 0))
         return self._engines[1] if self._active is self._engines[0] else self._engines[0]
+
+    def _new_engine(self, tag, volume):
+        engine = self._wire(self._make(tag))
+        for method, args in self._settings.items():
+            getattr(engine, method)(*args)
+        engine.set_volume(volume)
+        return engine
 
     def _retire_spare(self):
         if len(self._engines) == 2:
@@ -195,6 +198,19 @@ class CrossfadeEngine(QObject):
         self._handed = self._next = ""
         for e in self._engines:
             e.stop()
+
+    def restart_output(self):
+        """Start new mpv processes to reopen the system's audio output."""
+        self._fade.stop()
+        self._fading_out = None
+        self._next = self._handed = ""
+        for engine in self._engines:
+            engine.quit()
+            engine.deleteLater()
+        self._active = self._new_engine("", self._volume)
+        self._engines = [self._active]
+        if self._seconds:
+            self._other()
 
     def quit(self):
         self._fade.stop()

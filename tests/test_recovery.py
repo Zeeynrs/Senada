@@ -2,7 +2,9 @@
 moves on, and YouTube's temporary block stops playback instead of skipping through everything.
 (run: python -m unittest discover tests)"""
 
+import ctypes
 import unittest
+from ctypes import wintypes
 from unittest import mock
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
@@ -84,6 +86,8 @@ class FakeEngine(QObject):
     def __init__(self):
         super().__init__()
         self.played, self.stopped = [], 0
+        self.restarts, self.toggles, self.seeks = 0, 0, []
+        self.idle = False
 
     def play(self, url):
         self.played.append(url)
@@ -96,6 +100,15 @@ class FakeEngine(QObject):
 
     def queue_next(self, url):
         pass
+
+    def restart_output(self):
+        self.restarts += 1
+
+    def toggle(self):
+        self.toggles += 1
+
+    def seek(self, position):
+        self.seeks.append(position)
 
 
 class SyncWorker(QObject):
@@ -220,6 +233,61 @@ class Recovery(unittest.TestCase):
         self.start([song(1), song(2)])
         self.engine.stateChanged.emit(True)
         self.assertEqual(self.player._fail_streak, 0)
+
+    @mock.patch("senada.player.IS_WINDOWS", True)
+    def test_play_after_a_long_pause_reopens_output_at_the_same_position(self):
+        with mock.patch("senada.player.time.time", return_value=1000) as clock:
+            p = self.make({"spotify:track:1": {"v": "a"}}, {"a": "https://audio/a"})
+            self.start([song(1), song(2)])
+            self.engine.positionChanged.emit(23_000)
+            self.engine.stateChanged.emit(False)
+            clock.return_value = 4600
+            p.streams.urls["a"] = "https://audio/fresh"
+            p.streams.forget = mock.Mock()
+            track_changes = []
+            p.trackChanged.connect(lambda: track_changes.append(p.state["uri"]))
+
+            p.togglePlay()
+
+        self.assertEqual(self.engine.restarts, 1)
+        self.assertEqual(self.engine.toggles, 0)
+        self.assertEqual(self.engine.played[-1], "https://audio/fresh")
+        self.assertEqual(track_changes, [])
+        p.streams.forget.assert_called_once_with("a")
+        self.engine.stateChanged.emit(True)
+        self.assertEqual(self.engine.seeks, [23_000])
+        self.assertEqual(p.position, 23_000)
+
+    @mock.patch("senada.player.IS_WINDOWS", True)
+    def test_normal_play_pause_keeps_the_current_output(self):
+        p = self.make({"spotify:track:1": {"v": "a"}}, {"a": "https://audio/a"})
+        self.start([song(1)])
+        self.engine.stateChanged.emit(False)
+        p.togglePlay()
+        self.assertEqual(self.engine.toggles, 1)
+        self.assertEqual(self.engine.restarts, 0)
+
+    @mock.patch("senada.player.IS_WINDOWS", True)
+    def test_wake_leaves_playback_paused_and_reopens_output_on_the_next_song(self):
+        from senada.power import WindowsWakeFilter
+
+        p = self.make({"spotify:track:1": {"v": "a"}, "spotify:track:2": {"v": "b"}},
+                      {"a": "https://audio/a", "b": "https://audio/b"})
+        self.start([song(1), song(2)])
+        self.engine.stateChanged.emit(False)
+        filter = WindowsWakeFilter(p.on_system_resume)
+        event = wintypes.MSG()
+        event.message = 0x0218  # WM_POWERBROADCAST
+        event.wParam = 0x0012  # PBT_APMRESUMEAUTOMATIC
+        self.assertEqual(filter.nativeEventFilter(b"windows_generic_MSG", ctypes.addressof(event)), (False, 0))
+        self.assertFalse(p.state["isPlaying"])
+        self.assertEqual(self.engine.restarts, 0)
+
+        p.next()
+
+        self.assertEqual(self.engine.restarts, 1)
+        self.assertEqual(self.engine.played, ["https://audio/a", "https://audio/b"])
+        self.assertEqual(p.position, 0)
 
 
 if __name__ == "__main__":

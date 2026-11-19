@@ -11,7 +11,7 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QImage
 
 from . import net, ytmusic
-from .config import PLAYBACK_FILE, read_json, write_private
+from .config import IS_WINDOWS, PLAYBACK_FILE, read_json, write_private
 from .i18n import tr
 from .engine import AudioEngine
 from .resolver import AudioResolver
@@ -23,6 +23,7 @@ logger = logging.getLogger("senada.player")
 DEFAULT_ACCENT = "#d9d9d9"  # neutral until the album art gives a colour
 BACKGROUND_POSITION_MS = 250  # position updates while Senada is not in view (4 per second)
 MAX_FAIL_STREAK = 3  # songs in a row that would not play before playback stops instead of skipping on
+WINDOWS_AUDIO_IDLE_SECONDS = 300
 
 
 def download(url: str) -> bytes:
@@ -99,6 +100,8 @@ class Player(QObject):
         }
         self._accent = DEFAULT_ACCENT
         self._position = 0
+        self._last_audio_activity = time.time()
+        self._woke_from_sleep = False
         self._queue = []
         self._queue_index = -1
         self._unshuffled = None  # original upcoming order kept while shuffle is on
@@ -202,6 +205,8 @@ class Player(QObject):
     # ---- playback engine callbacks --------------------------------------
 
     def _on_engine_pos(self, pos_ms: int):
+        if IS_WINDOWS and self._state.get("isPlaying") and pos_ms != self._position:
+            self._last_audio_activity = time.time()
         self._position = pos_ms
         self.positionChanged.emit()
         self._prefetch_next()  # cheap once the next track is ready
@@ -458,6 +463,15 @@ class Player(QObject):
     def start(self):
         self.refreshDevices()
 
+    def on_system_resume(self):
+        # Playback can be paused intentionally. Defer the reset until playback is requested.
+        self._woke_from_sleep = True
+
+    def _needs_audio_reset(self):
+        # Wall time counts sleep as well as time spent paused or idle.
+        return IS_WINDOWS and (self._woke_from_sleep
+                               or time.time() - self._last_audio_activity >= WINDOWS_AUDIO_IDLE_SECONDS)
+
     def stop(self):
         self.engine.stop()
         self._state["isPlaying"] = False
@@ -486,12 +500,15 @@ class Player(QObject):
             idx = max(0, min(self._queue_index, len(self._queue) - 1))
             self._play_index(idx, start_position_ms=resume_pos)
             return
-        if self.engine.idle is True and not self._state.get("isPlaying") and self._queue:
-            # mpv has nothing loaded (stopped at the end of the queue, or by the sleep timer):
-            # pausing would do nothing, so the song starts again (or the next one after the timer)
-            index = self._queue_index + 1 if self._resume_next else self._queue_index
-            self._play_index(index if 0 <= index < len(self._queue) else max(0, self._queue_index))
-            return
+        if self._queue and not self._state.get("isPlaying"):
+            if self.engine.idle is True:
+                # At the end of the queue or after the sleep timer, there is no file to unpause.
+                index = self._queue_index + 1 if self._resume_next else self._queue_index
+                self._play_index(index if 0 <= index < len(self._queue) else max(0, self._queue_index))
+                return
+            if self._needs_audio_reset():
+                self._play_index(self._queue_index, start_position_ms=self._position, resume_current=True)
+                return
         self.engine.toggle()
 
     @Slot()
@@ -580,9 +597,17 @@ class Player(QObject):
 
     # ---- play contexts & queues -----------------------------------------
 
-    def _play_index(self, index: int, start_position_ms: int = 0):
+    def _play_index(self, index: int, start_position_ms: int = 0, *, resume_current: bool = False):
         if index < 0 or index >= len(self._queue):
             return
+        if self._needs_audio_reset():
+            logger.info("reopening Windows audio after %s", "system resume" if self._woke_from_sleep else "inactivity")
+            self._woke_from_sleep = False
+            self.engine.restart_output()
+            if self._started[1]:
+                self.streams.forget(self._started[1])
+            self._prefetched = ""
+        self._last_audio_activity = time.time()
         self._restored_pending = False
         self._resume_next = False
         self._autoplay_token = -1
@@ -602,10 +627,10 @@ class Player(QObject):
         }
         self.stateChanged.emit()
         self.positionChanged.emit()
-        self.trackChanged.emit()
-        self.queueChanged.emit()
-
-        self._on_track_changed(track)
+        if not resume_current:
+            self.trackChanged.emit()
+            self.queueChanged.emit()
+            self._on_track_changed(track)
 
         # a downloaded song plays from its file; should that fail, it is streamed after all
         # (_on_load_failed falls back to the YouTube upload it was downloaded from)

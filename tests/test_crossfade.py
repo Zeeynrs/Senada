@@ -107,6 +107,26 @@ class Crossfade(unittest.TestCase):
         self.assertEqual(spare.did("quit"), [("quit",)])
         self.assertEqual(self.a.did("quit"), [])
 
+    def test_restarting_output_recreates_mpv_with_the_current_audio_settings(self):
+        self.xf.set_volume(34)
+        self.xf.set_audio_device("wasapi/speakers")
+        self.xf.set_tempo(1.25, True)
+        self.xf.set_crossfade(4)
+        spare = self.made[1]
+
+        self.xf.restart_output()
+        self.xf.play("song")
+
+        self.assertEqual(self.a.did("quit"), [("quit",)])
+        self.assertEqual(spare.did("quit"), [("quit",)])
+        primary, secondary = self.made[2:]
+        self.assertEqual(primary.did("play"), [("play", "song")])
+        self.assertEqual(primary.did("set_volume")[-1], ("set_volume", 34))
+        self.assertEqual(secondary.did("set_volume")[-1], ("set_volume", 0))
+        for engine in (primary, secondary):
+            self.assertIn(("set_audio_device", "wasapi/speakers"), engine.calls)
+            self.assertIn(("set_tempo", 1.25, True), engine.calls)
+
     def test_turning_it_off_during_overlap_retires_the_outgoing_mpv_after_the_fade(self):
         self.xf.set_crossfade(4)
         active = self.made[1]
