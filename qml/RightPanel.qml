@@ -95,7 +95,7 @@ Rectangle {
                 highlightRangeMode: lyrics.synced && !userScroll.running ? ListView.ApplyRange : ListView.NoHighlightRange
                 preferredHighlightBegin: height * 0.3
                 preferredHighlightEnd: height * 0.3 + 60
-                highlightMoveDuration: 380
+                highlightMoveDuration: 220
                 ScrollBar.vertical: NScrollBar {}
                 SmoothScroll { flickable: lines }
                 onMovementStarted: userScroll.restart()

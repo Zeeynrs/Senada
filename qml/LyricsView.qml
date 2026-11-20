@@ -31,7 +31,7 @@ Item {
         highlightRangeMode: lyrics.synced ? ListView.ApplyRange : ListView.NoHighlightRange
         preferredHighlightBegin: height * 0.34
         preferredHighlightEnd: height * 0.34 + 84
-        highlightMoveDuration: 550
+        highlightMoveDuration: 220
         highlightMoveVelocity: -1
         boundsBehavior: Flickable.StopAtBounds
         onHeightChanged: if (lv.followHeight) lv.settle()

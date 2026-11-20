@@ -32,6 +32,7 @@ from .lru import BoundedCache
 
 OFFSET_FILE = CONFIG_DIR / "lyrics_offsets.json"
 LYRICS_CACHE_LIMIT = 30  # songs whose lyrics (and translations) stay in memory
+LYRIC_LEAD_MS = 250  # show the next phrase just ahead of the vocal
 
 LRC_LINE = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 HEADERS = {"User-Agent": "Senada/0.1 (desktop music player)"}
@@ -462,6 +463,7 @@ def fetch_lyrics(track: dict, source: str = "auto"):
 class Lyrics(QObject):
     changed = Signal()
     currentChanged = Signal()
+    positionChanged = Signal()
     sourceChanged = Signal()
     extraChanged = Signal()
     offsetChanged = Signal()
@@ -507,6 +509,10 @@ class Lyrics(QObject):
     @Property(int, notify=offsetChanged)
     def offset(self):
         return self._offset
+
+    @Property(int, notify=positionChanged)
+    def position(self):
+        return self.player.position + self._offset + LYRIC_LEAD_MS
 
     @Slot(int)
     def setOffset(self, ms):
@@ -711,9 +717,9 @@ class Lyrics(QObject):
         self.worker.run(lambda: fetch_lyrics(track, source), done, failed)
 
     def _on_position(self):
-        if not self._synced:
-            return
-        idx = bisect.bisect_right(self._times, self.player.position + self._offset + 250) - 1
-        if idx != self._current:
-            self._current = idx
-            self.currentChanged.emit()
+        if self._synced:
+            idx = bisect.bisect_right(self._times, self.position) - 1
+            if idx != self._current:
+                self._current = idx
+                self.currentChanged.emit()
+        self.positionChanged.emit()

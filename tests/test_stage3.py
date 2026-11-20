@@ -51,11 +51,13 @@ class LyricsOffsetTests(unittest.TestCase):
                 player.trackChanged.emit()
                 player.position = 2200  # 2200 + 250 = 2450 -> Line 1 (idx 0)
                 player.positionChanged.emit()
+                self.assertEqual(lyr.position, 2450)
                 self.assertEqual(lyr.current, 0)
 
                 # Advance lyrics by +600ms -> 2200 + 600 + 250 = 3050 -> Line 2 (idx 1)
                 lyr.adjustOffset(600)
                 self.assertEqual(lyr.offset, 600)
+                self.assertEqual(lyr.position, 3050)
                 self.assertEqual(lyr.current, 1)
 
                 # Switch to track B -> offset is 0 for track B
