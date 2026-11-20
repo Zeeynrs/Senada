@@ -73,7 +73,7 @@ Instalasi, fitur, impor playlist, privasi, pemecahan masalah, dan pengembangan.
 - Light and dark themes that follow Windows, KDE or GNOME, or that you pick yourself.
 - 12 accent colors (Mint, Indigo, Sky, Aurora, Sunset, Ocean, Forest, Berry, Amber, Rose, Carbon, Chrome), or **Follow the song**: the whole app takes the colour of the cover that is playing.
 - **Player bar**: docked along the bottom, or **floating** as a rounded card that takes on the song's blurred cover and colour.
-- **Full-screen player** in four styles: round cover inside a circular visualizer (*cava*), a spinning **vinyl record** with a tonearm, a magazine **poster**, or a **cinema** screen with the lyrics as subtitles.
+- **Full-screen player** in four styles: the cover large with the music's spectrum on the seek bar (*cava*), a spinning **vinyl record** with a tonearm, a magazine **poster**, or a **cinema** screen with the lyrics as subtitles.
 - **Seek bar styles**: a line, a wave, a waveform or dots.
 - **Mini player** in four styles: classic, sound wave, running lyrics or cover glass; it tucks into the top edge after a while (5–15 s, or never).
 - **Glass effect** (optional): choose *Album cover* or *Transparent* (acrylic on Windows 11, blur on Hyprland / KDE) in *Settings → Appearance → Glass effect*. **Liquid Glass is temporarily disabled while it is being reworked**; saved Liquid Glass preferences use the standard appearance.
@@ -391,7 +391,7 @@ Senada stands on great free software and services: [mpv](https://mpv.io), [yt-dl
 - Tema terang dan gelap yang mengikuti Windows, KDE, atau GNOME, atau dipilih sendiri.
 - 12 warna aksen (Mint, Indigo, Langit, Aurora, Senja, Samudra, Hutan, Beri, Amber, Mawar, Karbon, Krom), atau **Ikuti lagu**: seluruh aplikasi mengambil warna cover yang sedang diputar.
 - **Player bar**: menempel di bawah, atau **mengambang** sebagai kartu membulat yang ikut berwarna cover lagu yang diburamkan.
-- **Player layar penuh** dengan empat gaya: sampul bulat di tengah visualizer melingkar (*cava*), **piringan hitam** yang berputar dengan lengan jarum, **poster** majalah, atau **layar bioskop** dengan lirik sebagai subtitle.
+- **Player layar penuh** dengan empat gaya: sampul besar dengan spektrum musik di atas seek bar (*cava*), **piringan hitam** yang berputar dengan lengan jarum, **poster** majalah, atau **layar bioskop** dengan lirik sebagai subtitle.
 - **Gaya bilah progres**: garis, gelombang, bentuk gelombang, atau titik-titik.
 - **Pemutar mini** dengan empat gaya: klasik, gelombang suara, lirik berjalan, atau kaca sampul; setelah beberapa saat (5–15 detik, atau tidak pernah) ia terselip di tepi atas layar.
 - **Efek kaca** (opsional): pilih *Sampul album* atau *Transparan* (acrylic di Windows 11, blur di Hyprland / KDE) di *Pengaturan → Tampilan → Efek kaca*. **Liquid Glass dinonaktifkan sementara dan sedang dikembangkan ulang**; pengaturan Liquid Glass yang sudah tersimpan memakai tampilan standar.

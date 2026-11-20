@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 
 // A small drawing of the full view in one style, for the cards in Settings → Appearance:
-//   visualizer  round cover in a ring of spectrum bars, the lyrics as lines beside it
+//   visualizer  the cover large, the spectrum standing on the seek bar, the lyrics beside it
 //   vinyl       a record on the left edge with its tonearm, the lyrics fanned out around it
 //   poster      the cover large, the title upright beside it, a headline and a pull quote
 //   cinema      a screen in a dark room, a wide still between black bars, a subtitle under it
@@ -38,47 +38,45 @@ Item {
     Item {
         anchors.fill: parent
         visible: ["vinyl", "poster", "cinema"].indexOf(pv.style) < 0
-        readonly property real cx: pv.w * 0.3
-        readonly property real cy: pv.h * 0.4
-        readonly property real r: pv.h * 0.19
+        readonly property real x0: pv.w * 0.12
+        readonly property real side: pv.h * 0.44
 
-        Repeater {  // spectrum ring
-            model: 40
-            Item {
-                required property int index
-                x: parent.cx
-                y: parent.cy
-                rotation: index * 9
-                Rectangle {
-                    x: -1
-                    width: 2
-                    radius: 1
-                    height: pv.h * (0.035 + 0.045 * Math.abs(Math.sin(index * 1.7)))
-                    y: -(parent.parent.r + 3 + height)
-                    color: Qt.rgba(0.62, 0.84, 1, 0.85)
-                }
-            }
-        }
         Rectangle {  // cover
-            x: parent.cx - width / 2
-            y: parent.cy - height / 2
-            width: parent.r * 2
+            x: parent.x0
+            y: pv.h * 0.12
+            width: parent.side
             height: width
-            radius: width / 2
+            radius: width * 0.06
             gradient: Gradient {
                 GradientStop { position: 0; color: pv.warm1 }
                 GradientStop { position: 1; color: pv.warm2 }
             }
         }
-        Column {  // title, seek bar, controls
-            x: parent.cx - width / 2
-            y: pv.h * 0.7
-            width: pv.w * 0.24
-            spacing: 4
-            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: parent.width * 0.6; height: 5; radius: 2.5; color: "#ffffff" }
-            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: parent.width * 0.38; height: 3; radius: 1.5; color: Qt.rgba(1, 1, 1, 0.45) }
+        Column {  // title, the spectrum on the seek bar, controls
+            x: parent.x0
+            y: pv.h * 0.12 + parent.side + pv.h * 0.05
+            width: parent.side
+            spacing: 3
+            Rectangle { width: parent.width * 0.55; height: 5; radius: 2.5; color: "#ffffff" }
+            Rectangle { width: parent.width * 0.36; height: 3; radius: 1.5; color: Qt.rgba(1, 1, 1, 0.45) }
+            Row {
+                topPadding: 3
+                height: pv.h * 0.07
+                spacing: 1.5
+                Repeater {
+                    model: 18
+                    Rectangle {
+                        required property int index
+                        anchors.bottom: parent.bottom
+                        width: (pv.h * 0.44 - 17 * 1.5) / 18
+                        height: pv.h * (0.015 + 0.045 * Math.abs(Math.sin(index * 1.3 + 0.4)))
+                        radius: width / 2
+                        color: index < 8 ? Qt.rgba(0.62, 0.84, 1, 0.95) : Qt.rgba(1, 1, 1, 0.3)
+                    }
+                }
+            }
             Rectangle { width: parent.width; height: 2; radius: 1; color: Qt.rgba(1, 1, 1, 0.3)
-                Rectangle { width: parent.width * 0.45; height: parent.height; radius: 1; color: "#ffffff" } }
+                Rectangle { width: parent.width * 0.45; height: parent.height; radius: 1; color: Qt.rgba(0.62, 0.84, 1, 0.95) } }
             Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 9; height: 9; radius: 4.5; color: "#ffffff" }
         }
         Column {  // lyrics

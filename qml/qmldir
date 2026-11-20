@@ -6,7 +6,6 @@ CardGrid 1.0 CardGrid.qml
 Carousel 1.0 Carousel.qml
 CinemaPlayer 1.0 CinemaPlayer.qml
 Chip 1.0 Chip.qml
-CircularSpectrum 1.0 CircularSpectrum.qml
 CollectionPage 1.0 CollectionPage.qml
 Cover 1.0 Cover.qml
 DevicesPopup 1.0 DevicesPopup.qml
@@ -54,6 +53,7 @@ SeekTrack 1.0 SeekTrack.qml
 SettingsDialog 1.0 SettingsDialog.qml
 Sidebar 1.0 Sidebar.qml
 SmoothScroll 1.0 SmoothScroll.qml
+SpectrumSeek 1.0 SpectrumSeek.qml
 singleton Theme 1.0 Theme.qml
 Toast 1.0 Toast.qml
 TopBar 1.0 TopBar.qml

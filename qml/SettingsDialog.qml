@@ -1055,7 +1055,7 @@ Popup {
                     "vinyl": I18n.t("A spinning record on the left edge with a tonearm that follows the song (drag it to seek); the lyrics fan out around the record."),
                     "poster": I18n.t("A magazine poster: the cover large and sharp, the title huge and upright beside it, the sung line as a pull quote."),
                     "cinema": I18n.t("A cinema screen: the cover is a wide film still the camera pans down as the song plays, the title rolls as opening credits and the lyrics are the subtitles; the queue is a board of showtimes.")
-                })[session.immersiveStyle] || I18n.t("The round cover in the middle of a circular visualizer, the lyrics next to it.")
+                })[session.immersiveStyle] || I18n.t("The cover large on the left, the music's spectrum on the seek bar under it, the lyrics next to it.")
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 4
@@ -1100,8 +1100,8 @@ Popup {
                 visible: session.immersiveStyle === "visualizer"  // only that style draws the spectrum
                 Layout.topMargin: 0
                 label: I18n.t("Visualizer")
-                hint: visualizer.available ? I18n.t("Circular spectrum around the cover in full view (uses cava).")
-                                           : I18n.t("Circular spectrum in full view (install cava to follow the audio live).")
+                hint: visualizer.available ? I18n.t("The music's spectrum on the seek bar in full view (uses cava).")
+                                           : I18n.t("The music's spectrum on the seek bar in full view (install cava to follow the audio live).")
                 NSwitch {
                     checked: session.visualizerEnabled
                     onToggled: session.visualizerEnabled = checked

@@ -3,8 +3,9 @@ import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Layouts
 
-// Full-window "now playing": round cover inside a circular visualizer (bars & wave),
-// seek and volume bars, synced lyrics, queue and equalizer, on the blurred cover art.
+// Full-window "now playing": the cover large on the left with the music's spectrum (bars or
+// wave) standing on the seek bar, controls and volume under it, synced lyrics, queue and
+// equalizer on the right, on the blurred cover art.
 // With the vinyl, poster or cinema full view style (wide windows) its own player (VinylPlayer,
 // PosterPlayer, CinemaPlayer) takes the place of the cover and lyrics columns.
 Item {
@@ -336,124 +337,140 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin: 4
         anchors.bottomMargin: 36
-        width: Math.min(parent.width - 96, im.wide && im.showPanel ? 1100 : 680)
-        spacing: im.wide && im.showPanel ? Math.min(72, Math.max(40, parent.width * 0.04)) : 32
+        width: Math.min(parent.width - 96, im.wide && im.showPanel ? 1180 : 560)
+        spacing: im.wide && im.showPanel ? Math.min(96, Math.max(48, parent.width * 0.06)) : 32
 
-        // ---- LEFT COLUMN: cover + visualizer, track info and controls ----
+        // ---- LEFT COLUMN: the cover large, title, the spectrum on the seek bar, controls ----
         ColumnLayout {
+            id: leftCol
             visible: im.wide || !im.showPanel
-            Layout.preferredWidth: im.wide && im.showPanel ? Math.min(420, mainRow.width * 0.40) : -1
+            Layout.preferredWidth: im.wide && im.showPanel ? Math.min(460, mainRow.width * 0.42) : -1
             Layout.fillWidth: !im.wide || !im.showPanel
             Layout.fillHeight: true
-            spacing: 12
+            spacing: 0
+            // the cover is as wide as the column, as long as the title and controls under it still fit
+            readonly property real side: Math.round(Math.max(180, Math.min(width, 520,
+                                                    height - infoBlock.implicitHeight - infoBlock.Layout.topMargin - 24)))
 
-            Item { Layout.fillHeight: true }
+            Item { Layout.fillHeight: true; Layout.fillWidth: true }  // also lets the column widen
 
-            // Round cover inside the visualizer
             Item {
-                id: coverStage
-                readonly property real side: Math.max(220, Math.min(
-                    im.wide && im.showPanel ? Math.min(390, im.width * 0.36) : Math.min(420, im.width - 120),
-                    im.height - 350,
-                    390
-                ))
-                readonly property bool visOn: session ? session.visualizerEnabled : true
-                readonly property real coverSide: Math.round(side * 0.62)
-                Layout.preferredWidth: side
-                Layout.preferredHeight: side
+                Layout.preferredWidth: leftCol.side
+                Layout.preferredHeight: leftCol.side
                 Layout.alignment: Qt.AlignHCenter
+                scale: im.s.isPlaying ? 1.0 : 0.97
+                Behavior on scale { NumberAnimation { duration: 500; easing.type: Easing.OutBack } }
 
-                CircularSpectrum {
+                RectangularShadow {
                     anchors.fill: parent
-                    visible: coverStage.visOn && !im.staged
-                    active: visualizer ? visualizer.active : false
-                    playing: !!im.s.isPlaying && im.shown
-                    style: session ? session.visualizerStyle : "bars"
-                    accentColor: Theme.accent
-                    coverRadius: (bigCover.width * bigCover.scale) / 2
+                    radius: 16
+                    offset.y: 14
+                    blur: 42
+                    spread: -6
+                    color: Qt.rgba(0, 0, 0, 0.5)
                 }
-
                 Cover {
                     id: bigCover
-                    anchors.centerIn: parent
-                    width: coverStage.coverSide
-                    height: coverStage.coverSide
-                    round: true
+                    anchors.fill: parent
+                    radius: 16
                     source: Theme.hiRes(im.s.imageLarge || im.s.image, 1200)
                     fallback: im.s.imageLarge || im.s.image || ""
-                    scale: im.s.isPlaying ? 1.0 : 0.95
-                    Behavior on scale { NumberAnimation { duration: 500; easing.type: Easing.OutBack } }
                 }
             }
 
-            // Centered Track Title, Artist + "•••", Album Name
             ColumnLayout {
-                Layout.preferredWidth: Math.min(400, coverStage.side + 40)
+                id: infoBlock
+                Layout.fillWidth: false
+                Layout.preferredWidth: leftCol.side
                 Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 4
-                spacing: 4
+                Layout.topMargin: 22
+                spacing: 0
 
-                Label {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: im.s.name || I18n.t("Nothing is playing")
-                    font.pixelSize: 26
-                    font.weight: Font.Black
-                    color: "#ffffff"
-                    elide: Text.ElideRight
-                }
-
+                // title and artist on the left, the heart on the right
                 RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: 8
-                    LinkLabel {
-                        text: im.s.artists || ""
-                        font.pixelSize: 16
-                        color: Qt.rgba(1, 1, 1, 0.72)
-                        onClicked: if (im.s.artistId || im.s.artists) { im.close(); Nav.goArtist(im.s) }
-                    }
-                    IconButton {
-                        visible: !!im.s.hasTrack
-                        implicitWidth: 30
-                        iconName: im.s.liked ? "heart" : "heart-outline"
-                        size: 17
-                        tint: im.s.liked ? Theme.like : Qt.rgba(1, 1, 1, 0.7)
-                        tip: im.s.liked ? I18n.t("Remove from Liked Songs") : I18n.t("Save to Liked Songs")
-                        onClicked: player.toggleLike()
-                    }
-                }
-
-                Label {
-                    visible: !!(im.s.album)
                     Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: im.s.album || ""
-                    font.pixelSize: 12
-                    color: Qt.rgba(1, 1, 1, 0.45)
-                    elide: Text.ElideRight
-                    HoverHandler { cursorShape: im.s.albumId ? Qt.PointingHandCursor : Qt.ArrowCursor }
-                    TapHandler { onTapped: if (im.s.albumId) { im.close(); Nav.go("album", im.s.albumId) } }
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Label {
+                            Layout.fillWidth: true
+                            text: im.s.name || I18n.t("Nothing is playing")
+                            font.pixelSize: 24
+                            font.weight: Font.Bold
+                            color: "#ffffff"
+                            elide: Text.ElideRight
+                        }
+                        LinkLabel {
+                            Layout.maximumWidth: parent.width
+                            text: im.s.artists || ""
+                            font.pixelSize: 15
+                            color: Qt.rgba(1, 1, 1, 0.72)
+                            onClicked: if (im.s.artistId || im.s.artists) { im.close(); Nav.goArtist(im.s) }
+                        }
+                        Label {
+                            visible: !!im.s.album
+                            Layout.fillWidth: true
+                            text: im.s.album || ""
+                            font.pixelSize: 12
+                            color: Qt.rgba(1, 1, 1, 0.45)
+                            elide: Text.ElideRight
+                            HoverHandler { cursorShape: im.s.albumId ? Qt.PointingHandCursor : Qt.ArrowCursor }
+                            TapHandler { onTapped: if (im.s.albumId) { im.close(); Nav.go("album", im.s.albumId) } }
+                        }
+                    }
+                    Rectangle {
+                        visible: !!im.s.hasTrack
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 2
+                        implicitWidth: 40
+                        implicitHeight: 40
+                        radius: 12
+                        color: likeMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.12)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.14)
+                        Behavior on color { ColorAnimation { duration: 140 } }
+                        Icon {
+                            anchors.centerIn: parent
+                            glyph: im.s.liked ? "heart" : "heart-outline"
+                            size: 18
+                            color: im.s.liked ? Theme.like : "#ffffff"
+                        }
+                        MouseArea {
+                            id: likeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: player.toggleLike()
+                        }
+                        ToolTip.visible: likeMouse.containsMouse
+                        ToolTip.text: im.s.liked ? I18n.t("Remove from Liked Songs") : I18n.t("Save to Liked Songs")
+                        ToolTip.delay: 400
+                    }
+                }
+
+                SpectrumSeek {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 14
+                    showSpectrum: session ? session.visualizerEnabled : true
+                    running: im.shown
+                }
+
+                ImmersiveTransport {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 8
+                    playSize: 56
+                }
+
+                ImmersiveVolume {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: Math.min(300, leftCol.side * 0.66)
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 10
                 }
             }
 
-            ImmersiveSeek {
-                Layout.preferredWidth: Math.min(360, coverStage.side + 20)
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 6
-            }
-
-            ImmersiveTransport {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 4
-            }
-
-            ImmersiveVolume {
-                Layout.preferredWidth: Math.min(320, coverStage.side)
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 4
-            }
-
-            Item { Layout.fillHeight: true }
+            Item { Layout.fillHeight: true; Layout.fillWidth: true }  // also lets the column widen
         }
 
         // ---- RIGHT COLUMN: Lyrics / Equalizer / Queue ----
@@ -494,7 +511,7 @@ Item {
         }
     }
 
-    Component { id: lyricsComp; LyricsView {} }
+    Component { id: lyricsComp; LyricsView { textSize: 30 } }
     Component { id: queueComp; QueueView {} }
     Component { id: eqComp; EqualizerView {} }
 }
