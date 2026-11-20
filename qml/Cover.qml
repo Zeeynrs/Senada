@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Window
 
 // Album/artist art with rounded corners (or scalloped badge) and a placeholder while loading.
@@ -19,6 +18,9 @@ Item {
     readonly property bool ready: img.status === Image.Ready
     readonly property real cornerRadius: (round || scalloped) ? width / 2 : radius
     readonly property int loadSize: Math.ceil(Math.max(width, height) * Screen.devicePixelRatio)
+    // rounded, round or scalloped through the shader; the software renderer has no shaders
+    // and shows the plain square image instead
+    readonly property bool shaped: !simple && GraphicsInfo.api !== GraphicsInfo.Software
 
     Rectangle {
         id: placeholderRect
@@ -34,88 +36,13 @@ Item {
         }
     }
 
-    Canvas {
-        anchors.fill: parent
-        visible: !root.ready && root.scalloped
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            const cx = width / 2
-            const cy = height / 2
-            const rBase = Math.min(cx, cy) * (1 - root.scallopDepth)
-            const amp = Math.min(cx, cy) * root.scallopDepth
-            const N = root.scallops
-            ctx.fillStyle = Theme.surface3
-            ctx.beginPath()
-            const steps = 360
-            for (let i = 0; i <= steps; i++) {
-                const a = (i / steps) * Math.PI * 2
-                const r = rBase + amp * Math.cos(N * a)
-                const x = cx + Math.cos(a) * r
-                const y = cy + Math.sin(a) * r
-                if (i === 0) ctx.moveTo(x, y)
-                else ctx.lineTo(x, y)
-            }
-            ctx.closePath()
-            ctx.fill()
-        }
-        Icon {
-            anchors.centerIn: parent
-            glyph: root.fallbackIcon
-            size: Math.max(14, Math.min(root.width * 0.38, 64))
-            color: Theme.faint
-        }
-    }
-
-    Image {
-        id: img
-        anchors.fill: parent
-        source: root.failed && root.fallback.toString() !== "" ? root.fallback : root.source
-        onStatusChanged: if (status === Image.Error && !root.failed) root.failed = true
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        sourceSize.width: root.loadSize
-        sourceSize.height: root.loadSize
-        visible: root.simple && root.ready
-        smooth: true
-    }
-
+    // scalloped placeholder, drawn only for scalloped covers that are still loading
     Loader {
         anchors.fill: parent
-        active: !root.simple && root.ready
-        sourceComponent: MultiEffect {
-            source: img
-            maskEnabled: true
-            maskSource: mask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 1.0
-            NumberAnimation on opacity { from: 0; to: 1; duration: 220 }
-        }
-    }
-
-    Item {
-        id: mask
-        width: root.width
-        height: root.height
-        layer.enabled: true
-        layer.smooth: true
-        // Keep visible: true when scalloped so Canvas always paints its FBO, but hide via opacity: 0
-        visible: root.scalloped
-        opacity: 0
-        Rectangle {
-            anchors.fill: parent
-            radius: root.cornerRadius
-            visible: !root.scalloped
-        }
-        Canvas {
-            id: scallopCanvas
-            anchors.fill: parent
-            visible: root.scalloped
+        active: !root.ready && root.scalloped
+        sourceComponent: Canvas {
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
-            Component.onCompleted: requestPaint()
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
@@ -124,7 +51,7 @@ Item {
                 const rBase = Math.min(cx, cy) * (1 - root.scallopDepth)
                 const amp = Math.min(cx, cy) * root.scallopDepth
                 const N = root.scallops
-                ctx.fillStyle = "#ffffff"
+                ctx.fillStyle = Theme.surface3
                 ctx.beginPath()
                 const steps = 360
                 for (let i = 0; i <= steps; i++) {
@@ -138,6 +65,48 @@ Item {
                 ctx.closePath()
                 ctx.fill()
             }
+            Icon {
+                anchors.centerIn: parent
+                glyph: root.fallbackIcon
+                size: Math.max(14, Math.min(root.width * 0.38, 64))
+                color: Theme.faint
+            }
+        }
+    }
+
+    Image {
+        id: img
+        anchors.fill: parent
+        source: root.failed && root.fallback.toString() !== "" ? root.fallback : root.source
+        onStatusChanged: if (status === Image.Error && !root.failed) root.failed = true
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        sourceSize.width: root.loadSize
+        sourceSize.height: root.loadSize
+        visible: !root.shaped && root.ready
+        smooth: true
+    }
+
+    // the shape is cut by a small shader straight from the image's texture: one texture per cover
+    // (a mask layer plus an effect copy of the image needed three)
+    Loader {
+        anchors.fill: parent
+        active: root.shaped && root.ready
+        sourceComponent: ShaderEffect {
+            readonly property real imageAspect: img.implicitHeight > 0 ? img.implicitWidth / img.implicitHeight : 1
+            readonly property real itemAspect: height > 0 ? width / height : 1
+            readonly property real cropW: imageAspect > itemAspect ? itemAspect / imageAspect : 1
+            readonly property real cropH: imageAspect > itemAspect ? 1 : imageAspect / itemAspect
+            property var source: img
+            property vector4d crop: Qt.vector4d((1 - cropW) / 2, (1 - cropH) / 2, cropW, cropH)
+            property vector2d itemSize: Qt.vector2d(width, height)
+            property real radius: root.cornerRadius
+            property real edge: 1 / Math.max(1, Screen.devicePixelRatio)
+            property real scallops: root.scalloped ? root.scallops : 0
+            property real scallopDepth: root.scallopDepth
+            supportsAtlasTextures: true
+            fragmentShader: "shaders/rounded-cover.frag.qsb"
+            NumberAnimation on opacity { from: 0; to: 1; duration: 220 }
         }
     }
 }
