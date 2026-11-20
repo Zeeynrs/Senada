@@ -68,10 +68,13 @@ Item {
                     // the low notes on the left, like the bars of an equalizer
                     v = 0.08 + 0.92 * Math.pow(ss.sampleBin(raw, x * (raw.length - 1) * 0.85), 0.8)
                 } else if (ss.playing) {
-                    const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 5.6), 2.4)
-                    const roll = 0.5 + 0.5 * Math.sin(t * 3.1 - x * 9.0)
-                    const shimmer = 0.5 + 0.5 * Math.sin(t * 7.7 + x * 23.0)
-                    v = 0.16 + 0.42 * (1 - x * 0.55) * (0.4 + 0.6 * beat) * (0.5 + 0.5 * roll) + 0.14 * shimmer
+                    // each bar on its own mix of rhythms, the low ones (left) taller, all of them
+                    // lifted together on the beat
+                    const n = 0.45 * (0.5 + 0.5 * Math.sin(t * 6.3 + i * 1.71))
+                            + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.7 - i * 0.83 + 1.3))
+                            + 0.20 * (0.5 + 0.5 * Math.sin(t * 9.1 + i * 2.93))
+                    const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 5.6), 3)
+                    v = 0.08 + (0.95 - 0.5 * x) * (0.2 + 0.55 * n + 0.25 * beat) * (0.5 + 0.5 * n)
                 }
                 v = Math.max(ss.rest, Math.min(1, v))
                 const step = (v - cur[i]) * (v > cur[i] ? attack : release)
