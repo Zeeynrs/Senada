@@ -33,6 +33,7 @@ Popup {
     readonly property int contentGutter: width < 940 ? 20 : 28
     readonly property color paneLeft: Theme.liquid ? Theme.glassFill
                                        : Theme.dark ? Theme.mix(Theme.sidebarSolid, Theme.bgSolid, 0.6) : Theme.sidebarSolid
+    readonly property int followGap: 6   // above an option that belongs to the setting over it
     readonly property color cardColor: Theme.liquid ? Theme.surface : Theme.surface2
 
     // `words` are English labels inside the section, searched in both languages
@@ -230,8 +231,12 @@ Popup {
             spacing: 10
         }
     }
+    // the line between two settings, with room around it: a setting's content stays close
+    // to its own title and further from the next one
     component Divider: Rectangle {
         Layout.fillWidth: true
+        Layout.topMargin: 6
+        Layout.bottomMargin: 6
         implicitHeight: 1
         color: Theme.line
     }
@@ -1073,7 +1078,7 @@ Popup {
             }
             SettingRow {
                 visible: Theme.accented
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Accent strength")
                 hint: session.accentStrength === "subtle"
                       ? I18n.t("Only the current song, the open page and the controls take the color.")
@@ -1108,7 +1113,7 @@ Popup {
             }
             SettingRow {
                 visible: session.glassMode !== "off"
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Glass thickness")
                 hint: I18n.t("Slide left for more see-through, right for more solid.")
                 NSlider {
@@ -1182,7 +1187,7 @@ Popup {
             }
             SettingRow {
                 visible: session.immersiveStyle === "visualizer"  // only that style draws the spectrum
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Visualizer")
                 hint: visualizer.available ? I18n.t("The music's spectrum on the seek bar in full view (uses cava).")
                                            : I18n.t("The music's spectrum on the seek bar in full view (install cava to follow the audio live).")
@@ -1208,7 +1213,7 @@ Popup {
                 }
             }
             SettingBlock {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 opacity: session.miniPlayer ? 1 : 0.5
                 label: I18n.t("Mini player style")
                 hint: ({
@@ -1226,7 +1231,7 @@ Popup {
                 }
             }
             SettingRow {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 opacity: session.miniPlayer ? 1 : 0.5
                 label: I18n.t("Tuck into the top edge")
                 hint: session.islandDock > 0
@@ -1266,7 +1271,7 @@ Popup {
                 }
             }
             SettingRow {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 opacity: session.trayIcon ? 1 : 0.5
                 enabled: session.trayIcon
                 label: I18n.t("Keep playing when closed")
@@ -1334,7 +1339,7 @@ Popup {
                 }
             }
             SettingRow {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Crossfade")
                 hint: effects.crossfade > 0
                       ? I18n.t("The next song fades in over the last {n} seconds of the one playing.", { n: effects.crossfade })
@@ -1357,7 +1362,7 @@ Popup {
                 }
             }
             SettingRow {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Skip silence")
                 hint: I18n.t("Long silences (at the start or end of a song, or before a hidden track) go by in a flash. The lyrics stay in time.")
                 NSwitch {
@@ -1473,7 +1478,7 @@ Popup {
             }
             SettingRow {
                 visible: lyrics.extra !== "off"
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: lyrics.extra === "roman" ? I18n.t("Romanization") : I18n.t("Translate with Google Translate")
                 hint: lyrics.extra === "roman"
                       ? I18n.t("Japanese, Korean and Chinese lines in Latin letters where the lyrics come with them (often from BetterLyrics). Korean is also romanized by Senada itself.")
@@ -1514,7 +1519,7 @@ Popup {
                     required property int index
                     Layout.fillWidth: true
                     spacing: 0
-                    Divider { visible: sc.index > 0 }
+                    Divider { visible: sc.index > 0; Layout.topMargin: 0; Layout.bottomMargin: 0 }  // one table, not separate settings
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 11
@@ -1550,7 +1555,7 @@ Popup {
             }
             SettingBlock {
                 visible: remote.enabled
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Scan with your phone")
                 hint: I18n.t("Only this code or link opens the remote. A new link stops the old one, also on phones that kept it.")
                 RowLayout {
@@ -1631,7 +1636,7 @@ Popup {
             }
             SettingRow {
                 visible: !scrobbler.connected && !scrobbler.connecting
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Connect")
                 hint: scrobbler.lastfmAvailable
                       ? I18n.t("Opens the service's page in your browser to allow Senada. Your password stays with the service.")
@@ -2019,7 +2024,7 @@ Popup {
                 }
             }
             SettingRow {
-                Layout.topMargin: 0
+                Layout.topMargin: dlg.followGap
                 label: I18n.t("Automatic backups")
                 hint: I18n.t("Once a week, and before every restore, Senada keeps a copy of your library (the last 5).")
                 NButton {
