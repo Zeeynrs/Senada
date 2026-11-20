@@ -761,7 +761,7 @@ Popup {
                 ColumnLayout {
                     id: sectionColumn
                     width: sectionList.width - 6
-                    spacing: 14
+                    spacing: 40   // a group's last section stays well clear of the next group's name
                     Repeater {
                         model: dlg.groups
                         ColumnLayout {
