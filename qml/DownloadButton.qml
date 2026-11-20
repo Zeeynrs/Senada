@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 
-// Whether one song is kept for offline, as a small button: an outlined arrow (click to
+// Whether one song is kept for offline, as a button: a download arrow (click to
 // download), a ring filling up while it downloads (click to cancel), a filled mark once done.
 AbstractButton {
     id: db
     property var track: ({})
-    property int size: 16
+    property int size: 22
     property color tint: palette.windowText
     readonly property string uri: track && track.uri ? track.uri : ""
     // 101 downloaded, 0-100 downloading, -1 waiting, -2 not downloaded
@@ -29,7 +29,7 @@ AbstractButton {
         Icon {
             anchors.centerIn: parent
             visible: !db.busy
-            glyph: db.done ? "downloaded" : "download-circle"
+            glyph: db.done ? "downloaded" : "download"
             size: db.size
             color: db.done ? Theme.ok : db.tint
         }

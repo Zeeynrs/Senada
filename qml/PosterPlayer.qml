@@ -166,7 +166,6 @@ Item {
                 DownloadButton {
                     visible: !!pp.s.hasTrack
                     track: pp.s
-                    size: 15
                     tint: Qt.rgba(1, 1, 1, 0.75)
                 }
                 Item { Layout.fillWidth: true }

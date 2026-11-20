@@ -167,7 +167,8 @@ Item {
                 SquareButton {
                     readonly property bool allDone: h.trackCount > 0 && h.downloadedCount >= h.trackCount
                     visible: h.canDownload && !h.loading
-                    iconName: allDone ? "downloaded" : "download-circle"
+                    iconName: allDone ? "downloaded" : "download"
+                    iconSize: 22
                     tint: allDone ? Theme.ok : Theme.text
                     tip: allDone ? I18n.t("Every song is downloaded")
                        : h.downloadedCount > 0 ? I18n.t("Download the other songs for offline ({done} of {total} downloaded)", { done: h.downloadedCount, total: h.trackCount })
@@ -237,6 +238,7 @@ Item {
     component SquareButton: AbstractButton {
         id: sq
         property string iconName
+        property int iconSize: 18
         property color tint: Theme.text
         property string tip
         anchors.verticalCenter: parent.verticalCenter
@@ -251,7 +253,7 @@ Item {
             border.color: sq.hovered || sq.visualFocus ? Theme.lineStrong : Theme.line
         }
         contentItem: Item {
-            Icon { anchors.centerIn: parent; glyph: sq.iconName; size: 18; color: sq.tint }
+            Icon { anchors.centerIn: parent; glyph: sq.iconName; size: sq.iconSize; color: sq.tint }
         }
         ToolTip.visible: tip !== "" && hovered
         ToolTip.text: tip

@@ -150,10 +150,11 @@ Rectangle {
             Item {
                 id: titleRow
                 Layout.fillWidth: true
-                implicitHeight: 26
+                implicitHeight: trackDownload.visible ? trackDownload.implicitHeight : 26
                 Label {
                     id: titleLabel
-                    width: Math.max(0, Math.min(implicitWidth, titleRow.width - 58))
+                    width: Math.max(0, Math.min(implicitWidth,
+                        titleRow.width - (trackDownload.visible ? 34 + trackDownload.implicitWidth : 0)))
                     anchors.verticalCenter: parent.verticalCenter
                     text: bar.hasTrack ? bar.s.name : I18n.t("Nothing playing yet")
                     elide: Text.ElideRight
@@ -174,11 +175,11 @@ Rectangle {
                     onClicked: player.toggleLike()
                 }
                 DownloadButton {
+                    id: trackDownload
                     x: titleLabel.width + 30
                     anchors.verticalCenter: parent.verticalCenter
                     visible: bar.hasTrack
                     track: bar.s
-                    size: 15
                     tint: Theme.dim
                 }
             }

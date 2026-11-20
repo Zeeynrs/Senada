@@ -575,7 +575,6 @@ Item {
                 DownloadButton {
                     visible: !!vp.s.hasTrack
                     track: vp.s
-                    size: 17
                     tint: Qt.rgba(1, 1, 1, 0.75)
                 }
             }
