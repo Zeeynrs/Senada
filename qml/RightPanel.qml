@@ -225,6 +225,7 @@ Rectangle {
             clip: true
             model: player.queue
             spacing: 0
+            readonly property QueueReorder reorder: QueueReorder { view: q }  // drag a song up or down
             ScrollBar.vertical: NScrollBar {}
             SmoothScroll { flickable: q }
             Component.onCompleted: player.refreshQueue()
@@ -308,6 +309,7 @@ Rectangle {
                 inQueue: true
                 queueOffset: index
                 queueCount: q.count
+                reorder: q.reorder
                 onPlay: player.skip(index + 1)
             }
         }

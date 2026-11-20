@@ -8,6 +8,7 @@ ListView {
     clip: true
     model: player.queue
     spacing: 2
+    readonly property QueueReorder reorder: QueueReorder { view: q }  // drag a song up or down
     ScrollBar.vertical: NScrollBar {}
     Component.onCompleted: player.refreshQueue()
 
@@ -61,6 +62,7 @@ ListView {
         inQueue: true
         queueOffset: index
         queueCount: q.count
+        reorder: q.reorder
         onPlay: player.skip(index + 1)
     }
     Label {

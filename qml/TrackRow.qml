@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 
 // One song. Three layouts:
@@ -21,6 +22,9 @@ Item {
     property int queueOffset: -1
     property int queueCount: 0
     property bool movable: false    // own playlist: reorder with Move up / Move down
+    property QueueReorder reorder: null   // queue rows: drag the row up or down to reorder
+    readonly property bool canDrag: reorder !== null && inQueue && queueOffset >= 0
+    readonly property bool dragged: canDrag && reorder.from === queueOffset
     property bool canMoveUp: false
     property bool canMoveDown: false
     signal moveUp()
@@ -47,10 +51,45 @@ Item {
     height: table ? (showCover ? 56 : 48) : compact ? 54 : 60
     opacity: track.playable === false ? 0.45 : 1
 
-    HoverHandler { id: hover }
+    // while a queue row is dragged it follows the pointer above the others, which make room
+    z: dragged ? 10 : 0
+    transform: Translate {
+        y: row.dragged ? row.reorder.delta : (row.canDrag ? row.reorder.shift(row.queueOffset) : 0)
+        Behavior on y {
+            enabled: !row.dragged
+            NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+        }
+    }
+    DragHandler {
+        enabled: row.canDrag
+        target: null
+        xAxis.enabled: false
+        cursorShape: Qt.ClosedHandCursor
+        function viewY(p) {
+            return row.reorder.view.mapFromItem(null, p.x, p.y).y
+        }
+        onActiveChanged: {
+            if (active)  // from where the button went down, so the row stays under the pointer
+                row.reorder.begin(row.queueOffset, row.height, viewY(centroid.scenePressPosition))
+            else if (row.dragged)
+                row.reorder.finish()
+        }
+        onCentroidChanged: if (active && row.dragged) row.reorder.update(viewY(centroid.scenePosition))
+    }
+
+    HoverHandler { id: hover; cursorShape: row.canDrag ? Qt.OpenHandCursor : Qt.ArrowCursor }
     TapHandler { onDoubleTapped: row.play() }
     TapHandler { acceptedButtons: Qt.RightButton; onTapped: menu.popup() }
 
+    RectangularShadow {  // lifts the dragged queue row
+        visible: row.dragged
+        anchors.fill: parent
+        anchors.margins: 6
+        radius: 8
+        offset.y: 6
+        blur: 18
+        color: Qt.rgba(0, 0, 0, 0.45)
+    }
     Rectangle {
         anchors.fill: parent
         anchors.leftMargin: row.table ? row.inset : 6
@@ -58,7 +97,9 @@ Item {
         anchors.topMargin: row.table ? 0 : 1
         anchors.bottomMargin: row.table ? 0 : 1
         radius: row.table ? 0 : 8
-        color: row.current ? (Theme.accented ? Theme.alpha(Theme.primary, 0.15) : Theme.alpha(row.ink, 0.08))
+        // the dragged row is solid, so the rows it passes over do not show through
+        color: row.dragged ? Qt.tint(row.palette.window, Theme.alpha(row.ink, 0.12))
+             : row.current ? (Theme.accented ? Theme.alpha(Theme.primary, 0.15) : Theme.alpha(row.ink, 0.08))
              : hover.hovered ? Theme.alpha(row.ink, 0.045) : "transparent"
     }
     Rectangle {  // table row separator

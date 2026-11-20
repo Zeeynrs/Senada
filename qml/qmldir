@@ -46,6 +46,7 @@ PageHeader 1.0 PageHeader.qml
 PlayerBar 1.0 PlayerBar.qml
 PosterPlayer 1.0 PosterPlayer.qml
 RightPanel 1.0 RightPanel.qml
+QueueReorder 1.0 QueueReorder.qml
 QueueView 1.0 QueueView.qml
 SearchPage 1.0 SearchPage.qml
 SeekBar 1.0 SeekBar.qml

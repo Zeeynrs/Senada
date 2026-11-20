@@ -44,6 +44,7 @@ Instalasi, fitur, impor playlist, privasi, pemecahan masalah, dan pengembangan.
 - Home, search, albums, artists and playlists from the **YouTube Music** catalog: new releases, trending, charts and community mixes.
 - **Import** public playlists and albums from **Spotify** (each song is matched on YouTube Music) and from **YouTube Music** (songs play right away).
 - **Radio**: right-click a song → *Play radio from this song*.
+- **Reorder the queue**: drag a song in *Up next* up or down to where you want it.
 - **Offline songs**: download a song, playlist or album and play it without internet, with its cover and lyrics (*right-click → Download for offline*).
 - The next song is prepared in advance, so songs change without a gap.
 - If a song will not play, Senada tries another upload of it, and otherwise moves on: the queue never gets stuck.
@@ -362,6 +363,7 @@ Senada stands on great free software and services: [mpv](https://mpv.io), [yt-dl
 - Beranda, pencarian, album, artis, dan playlist dari katalog **YouTube Music**: rilis baru, trending, tangga lagu, dan mix komunitas.
 - **Impor** playlist dan album publik dari **Spotify** (setiap lagu dicocokkan di YouTube Music) dan dari **YouTube Music** (lagu langsung bisa diputar).
 - **Radio**: klik kanan lagu → *Putar radio dari lagu ini*.
+- **Atur urutan antrean**: seret lagu di *Berikutnya* naik atau turun ke posisi yang kamu mau.
 - **Lagu offline**: unduh lagu, playlist, atau album lalu putar tanpa internet, lengkap dengan sampul dan liriknya (*klik kanan → Unduh untuk offline*).
 - Lagu berikutnya disiapkan lebih dulu, jadi perpindahan lagu tanpa jeda.
 - Kalau sebuah lagu gagal diputar, Senada mencoba versi unggahan lain, atau melewatinya: antrean tidak pernah macet.
