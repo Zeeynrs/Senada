@@ -22,8 +22,9 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     function openAt(key) {
-        if (key && sections.some(s => s.key === key))
-            section = key
+        const target = key === "whatsnew" ? "updates" : key
+        if (target && sections.some(s => s.key === target))
+            section = target
         searchField.text = ""
         open()
     }
@@ -86,12 +87,11 @@ Popup {
         { group: "App", key: "storage", icon: "storage", title: "Cache & storage",
           desc: "Offline songs and the cache on this device.",
           words: ["Storage", "Offline songs", "Download", "Downloads", "Offline", "Open folder", "Cache", "Saved covers", "Clear cache"] },
-        { group: "App", key: "whatsnew", icon: "new", title: "What's new",
-          desc: "What changed in each version, and which version is on this device.",
-          words: ["Changelog", "Log", "Release", "Version", "On this device", "Version history"] },
-        { group: "App", key: "updates", icon: "refresh", title: "Updates",
-          desc: "New versions of Senada from GitHub.",
-          words: ["App updates (GitHub)", "Check for updates", "Update & restart", "GitHub", "Version"] },
+        { group: "App", key: "updates", icon: "refresh", title: "Updates & what's new",
+          desc: "Check for updates and see what changed in each version.",
+          words: ["Updates", "What's new", "App updates (GitHub)", "Check for updates", "Update & restart", "Sync again",
+                  "GitHub", "Changelog", "Log", "Release", "Version", "On this device", "Version history",
+                  "New versions of Senada from GitHub.", "What changed in each version, and which version is on this device."] },
         { group: "App", key: "about", icon: "info", title: "About",
           desc: "About Senada.",
           words: ["Version", "License", "Senada"] }
@@ -1019,7 +1019,6 @@ Popup {
                                    : dlg.section === "backup" ? backupPage
                                    : dlg.section === "updates" ? updatesPage
                                    : dlg.section === "about" ? aboutPage
-                                   : dlg.section === "whatsnew" ? whatsNewPage
                                    : appearancePage
                 }
             }
@@ -2053,66 +2052,8 @@ Popup {
     Component {
         id: updatesPage
         ColumnLayout {
-            spacing: 0
-            SettingRow {
-                label: I18n.t("Status")
-                hint: updater.currentLabel + " • " + I18n.t("Checked: {time}", { time: updater.lastChecked })
-                Rectangle {
-                    implicitWidth: 8; implicitHeight: 8; radius: 4
-                    color: updater.updating || updater.checking || updater.updateAvailable ? Theme.warn : Theme.ok
-                }
-                Label {
-                    text: updater.statusText
-                    color: updater.updateAvailable ? Theme.text : Theme.dim
-                    font.pixelSize: 13
-                    font.weight: updater.updateAvailable ? Font.DemiBold : Font.Normal
-                }
-            }
-            Rectangle {
-                visible: updater.updateAvailable && updater.changelog !== ""
-                Layout.fillWidth: true
-                Layout.bottomMargin: 14
-                implicitHeight: changelogLabel.implicitHeight + 24
-                radius: 10
-                color: Theme.subtle
-                border.width: 1
-                border.color: Theme.line
-                Label {
-                    id: changelogLabel
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    text: updater.changelog
-                    font.family: Theme.mono
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-            }
-            Divider {}
-            RowLayout {
-                Layout.topMargin: 16
-                spacing: 10
-                NButton {
-                    text: updater.checking ? I18n.t("Checking…") : I18n.t("Check for updates")
-                    iconName: "refresh"
-                    enabled: !updater.checking && !updater.updating
-                    onClicked: updater.check(false)
-                }
-                NButton {
-                    visible: !updater.releaseMode || updater.updateAvailable || updater.updating
-                    text: updater.updating ? I18n.t("Updating…") : (updater.updateAvailable ? I18n.t("Update & restart") : I18n.t("Sync again"))
-                    iconName: "download"
-                    primary: updater.updateAvailable
-                    enabled: !updater.updating && !updater.checking
-                    onClicked: updater.applyUpdate()
-                }
-            }
-        }
-    }
-
-    Component {
-        id: whatsNewPage
-        ColumnLayout {
-            id: wn
+            id: updates
+            objectName: "page-updates"
             readonly property var info: updater.versionInfo
             spacing: 0
 
@@ -2147,17 +2088,17 @@ Popup {
                             }
                             RowLayout {
                                 spacing: 8
-                                Label { text: "Senada " + wn.info.version; font.pixelSize: 22; font.weight: Font.Black }
+                                Label { text: "Senada " + updates.info.version; font.pixelSize: 22; font.weight: Font.Black }
                                 Pill {
-                                    visible: wn.info.ahead > 0
-                                    text: I18n.n("+{n} change", "+{n} changes", wn.info.ahead)
+                                    visible: updates.info.ahead > 0
+                                    text: I18n.n("+{n} change", "+{n} changes", updates.info.ahead)
                                 }
                             }
                         }
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: wn.info.summary
+                        text: updates.info.summary
                         wrapMode: Text.WordWrap
                         font.pixelSize: 13
                     }
@@ -2168,11 +2109,12 @@ Popup {
                         rowSpacing: 6
                         Repeater {
                             model: [
-                                { k: I18n.t("Installed from"), v: wn.info.source },
-                                { k: I18n.t("Commit"), v: wn.info.commit },
-                                { k: I18n.t("Latest change"), v: wn.info.commitMessage },
+                                { k: I18n.t("Installed from"), v: updates.info.source },
+                                { k: I18n.t("Commit"), v: updates.info.commit },
+                                { k: I18n.t("Latest change"), v: updates.info.commitMessage },
                                 { k: I18n.t("Update status"), v: updater.statusText },
-                                { k: I18n.t("System"), v: wn.info.system }
+                                { k: I18n.t("Last checked"), v: updater.lastChecked },
+                                { k: I18n.t("System"), v: updates.info.system }
                             ].filter(r => r.v)
                             delegate: Item {
                                 id: cell
@@ -2202,16 +2144,19 @@ Popup {
                     RowLayout {
                         spacing: 10
                         NButton {
+                            objectName: "checkForUpdatesButton"
                             text: updater.checking ? I18n.t("Checking…") : I18n.t("Check for updates")
                             iconName: "refresh"
                             enabled: !updater.checking && !updater.updating
                             onClicked: updater.check(false)
                         }
                         NButton {
-                            visible: updater.updateAvailable || updater.updating
-                            text: updater.updating ? I18n.t("Updating…") : I18n.t("Update & restart")
+                            objectName: "applyUpdateButton"
+                            visible: !updater.releaseMode || updater.updateAvailable || updater.updating
+                            text: updater.updating ? I18n.t("Updating…")
+                                  : updater.updateAvailable ? I18n.t("Update & restart") : I18n.t("Sync again")
                             iconName: "download"
-                            primary: true
+                            primary: updater.updateAvailable
                             enabled: !updater.updating && !updater.checking
                             onClicked: updater.applyUpdate()
                         }
@@ -2219,8 +2164,41 @@ Popup {
                 }
             }
 
+            Rectangle {
+                objectName: "availableUpdateNotes"
+                visible: updater.updateAvailable && updater.changelog !== ""
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                implicitHeight: updateNotes.implicitHeight + 24
+                radius: 10
+                color: Theme.subtle
+                border.color: Theme.line
+                ColumnLayout {
+                    id: updateNotes
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: 12
+                    spacing: 6
+                    Label {
+                        text: I18n.t("Changes in this update")
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: updater.changelog
+                        textFormat: Text.PlainText
+                        font.family: Theme.mono
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+
             // ---- what changed in each version
             Label {
+                objectName: "versionHistoryHeading"
                 Layout.topMargin: 18
                 Layout.bottomMargin: 4
                 text: I18n.t("Version history")
@@ -2234,7 +2212,7 @@ Popup {
                     required property var modelData
                     required property int index
                     readonly property bool upcoming: modelData.version === "next"
-                    readonly property bool installed: upcoming || (modelData.version === wn.info.version && wn.info.ahead <= 0)
+                    readonly property bool installed: upcoming || (modelData.version === updates.info.version && updates.info.ahead <= 0)
                     Layout.fillWidth: true
                     spacing: 8
                     Divider { visible: rel.index > 0; Layout.topMargin: 6; Layout.bottomMargin: 6 }
@@ -2249,7 +2227,7 @@ Popup {
                         }
                         Pill { visible: rel.installed; text: I18n.t("On this device") }
                         Pill {
-                            visible: !rel.upcoming && rel.modelData.version === wn.info.version && wn.info.ahead > 0
+                            visible: !rel.upcoming && rel.modelData.version === updates.info.version && updates.info.ahead > 0
                             text: I18n.t("Latest release")
                         }
                         Item { Layout.fillWidth: true }
@@ -2319,9 +2297,10 @@ Popup {
                         wrapMode: Text.WordWrap
                     }
                     LinkLabel {
+                        objectName: "aboutWhatsNewLink"
                         text: I18n.t("See what's new")
                         font.pixelSize: 13
-                        onClicked: dlg.section = "whatsnew"
+                        onClicked: dlg.section = "updates"
                     }
                 }
             }
