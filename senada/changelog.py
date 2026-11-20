@@ -1,4 +1,4 @@
-"""What changed in each version, shown in Settings → What's new (newest first).
+"""What changed in each version, shown in Settings → Updates & what's new (newest first).
 
 Kept in the app (not fetched) so it works offline and matches the code that is running.
 Each entry has the text in English and Indonesian. "next" collects what is on `main` but
@@ -12,6 +12,38 @@ CHANGELOG = [
         "date": "",
         "en": {"new": [], "fixed": []},
         "id": {"new": [], "fixed": []},
+    },
+    {
+        "version": "1.1.2",
+        "date": "2026-11-20",
+        "en": {
+            "new": [
+                "Settings groups related options more closely. Updates & what's new combines update controls and version history on one page.",
+                "Cache & storage shows space used by offline songs and cached artwork. Open the downloads folder or clear the artwork cache from this page.",
+                "The Visualizer full view puts the album cover beside the lyrics and shows a spectrum in the seek bar.",
+                "Drag songs up or down to reorder the upcoming queue while listening.",
+            ],
+            "fixed": [
+                "Lyrics scroll to the active line faster, and karaoke follows the same timing as the active line.",
+                "Larger, clearer download arrows in the player and on album and playlist pages.",
+                "Cover art is reused across restarts, and in-memory caches and secondary views use less memory.",
+                "Windows audio recovers after sleep or inactivity, and streaming avoids hangs in mpv's curl backend.",
+            ],
+        },
+        "id": {
+            "new": [
+                "Pengaturan mengelompokkan opsi terkait lebih rapat. Pembaruan & riwayat menyatukan kontrol pembaruan dan riwayat versi dalam satu halaman.",
+                "Cache & penyimpanan menampilkan ukuran lagu offline dan cache sampul. Buka folder unduhan atau bersihkan cache sampul dari halaman ini.",
+                "Tampilan penuh Visualizer menempatkan sampul album di samping lirik dan menampilkan spektrum di bilah progres.",
+                "Seret lagu ke atas atau ke bawah untuk mengubah urutan antrean saat mendengarkan.",
+            ],
+            "fixed": [
+                "Lirik lebih cepat bergulir ke baris aktif, dan sorotan karaoke mengikuti waktu baris aktif.",
+                "Ikon unduh lebih besar dan jelas di pemutar serta halaman album dan playlist.",
+                "Sampul album digunakan kembali setelah aplikasi dibuka ulang. Cache di memori dan tampilan tambahan memakai lebih sedikit memori.",
+                "Audio Windows pulih setelah mode tidur atau lama tidak aktif. Streaming juga menghindari macet di backend curl mpv.",
+            ],
+        },
     },
     {
         "version": "1.1.1",
