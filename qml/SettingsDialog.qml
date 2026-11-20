@@ -681,6 +681,7 @@ Popup {
                 Layout.fillHeight: true
                 Flickable {
                     id: sectionList
+                    objectName: "sectionList"
                     anchors.fill: parent
                     clip: true
                     contentHeight: sectionColumn.implicitHeight
@@ -713,12 +714,35 @@ Popup {
                                     AbstractButton {
                                         id: entry
                                         required property var modelData
+                                        objectName: "section-" + modelData.key
                                         readonly property bool current: dlg.section === modelData.key
                                         Layout.fillWidth: true
                                         implicitHeight: 38
                                         hoverEnabled: true
                                         focusPolicy: Qt.NoFocus
                                         onClicked: dlg.section = modelData.key
+                                        // the chosen section scrolls into view, also when Settings opens
+                                        // on one further down (e.g. Nav.go("settings", "about"))
+                                        function reveal() {
+                                            if (!current || sectionList.height <= 0)
+                                                return
+                                            const top = entry.mapToItem(sectionColumn, 0, 0).y
+                                            const above = 30   // room for the group name
+                                            const below = 40   // clear of the fade at the bottom
+                                            const maxY = Math.max(0, sectionList.contentHeight - sectionList.height)
+                                            if (top - above < sectionList.contentY)
+                                                sectionList.contentY = Math.max(0, top - above)
+                                            else if (top + height + below > sectionList.contentY + sectionList.height)
+                                                sectionList.contentY = Math.min(maxY, top + height + below - sectionList.height)
+                                        }
+                                        onCurrentChanged: Qt.callLater(reveal)
+                                        Component.onCompleted: Qt.callLater(reveal)
+                                        Connections {
+                                            target: sectionList
+                                            enabled: entry.current
+                                            function onHeightChanged() { Qt.callLater(entry.reveal) }
+                                            function onContentHeightChanged() { Qt.callLater(entry.reveal) }
+                                        }
                                         background: Rectangle {
                                             radius: 9
                                             color: entry.current ? (Theme.accented ? Theme.selected : Theme.pressed) : entry.hovered ? Theme.hover : "transparent"

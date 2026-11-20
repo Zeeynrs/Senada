@@ -66,6 +66,37 @@ def install(session, window):
                     others = lambda: [k for k in SPLIT if k != key and window.findChild(QObject, "page-" + k)]
                     wait_for(lambda: not others(), f"{key} also shows {others()}")
                 QTest.qWait(30)
+            # opening on a section low in the list scrolls it into view, and back up again
+            shell.navigate("settings", "", False)
+            wait_for(lambda: window.findChild(QObject, "settingsDialog") is None, "Settings did not close")
+            window.resize(1000, 560)  # too short for every section at once
+            QTest.qWait(100)
+            shell.navigate("settings", "about", False)
+            from PySide6.QtCore import QPointF
+
+            def entry_for(key):  # made by a Repeater: found through the visual tree, not findChild
+                flick = window.findChild(QObject, "sectionList")
+                todo = [flick] if flick is not None else []
+                while todo:
+                    item = todo.pop()
+                    if item.objectName() == "section-" + key:
+                        return item
+                    todo.extend(item.childItems())
+                return None
+
+            wait_for(lambda: entry_for("about") is not None, "Settings did not reopen")
+
+            def shown(key):
+                entry = entry_for(key)
+                flick = window.findChild(QObject, "sectionList")
+                y = entry.mapToItem(flick, QPointF(0, 0)).y()
+                return 0 <= y and y + entry.height() <= flick.height()
+            flick = window.findChild(QObject, "sectionList")
+            wait_for(lambda: flick.property("contentHeight") > flick.height(), "The list needs no scrolling here")
+            wait_for(lambda: shown("about"), "About was not scrolled into view")
+            assert flick.property("contentY") > 0
+            window.findChild(QObject, "settingsDialog").setProperty("section", "appearance")
+            wait_for(lambda: shown("appearance"), "Appearance was not scrolled into view")
             print("SECTIONS_OK", len(keys), flush=True)
         except Exception:
             traceback.print_exc()
