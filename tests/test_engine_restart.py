@@ -43,17 +43,39 @@ class DeadProcess:
 
 
 class MpvStartup(unittest.TestCase):
-    def test_streaming_limits_both_directions_of_the_demuxer_cache(self):
+    def launch_args(self, knows_curl=False):
         with mock.patch("senada.engine.find_tool", return_value="mpv"), \
+                mock.patch("senada.engine.mpv_has_option", return_value=knows_curl), \
                 mock.patch("senada.engine.popen_tied", return_value=(None, None)) as launch, \
                 mock.patch("atexit.register"):
             engine = AudioEngine()
         self.addCleanup(engine.quit)
-        args = launch.call_args.args[0]
+        return launch.call_args.args[0]
+
+    def test_streaming_limits_both_directions_of_the_demuxer_cache(self):
+        args = self.launch_args()
         self.assertIn("--cache-secs=45", args)
         self.assertIn("--demuxer-max-bytes=8MiB", args)
         self.assertIn("--demuxer-max-back-bytes=2MiB", args)
         self.assertIn("--demuxer-donate-buffer=no", args)
+
+    def test_curl_backend_is_off_where_mpv_has_it(self):
+        self.assertIn("--curl-enabled=no", self.launch_args(knows_curl=True))
+        # older mpv would refuse to start with an option it does not know
+        self.assertNotIn("--curl-enabled=no", self.launch_args(knows_curl=False))
+
+    def test_option_list_is_read_by_name(self):
+        from senada import engine as engine_mod
+        listing = (" --curl-enabled                   Flag (default: yes)\n"
+                   " --curl-max-retries               Integer (default: 5)\n")
+        engine_mod.mpv_has_option.cache_clear()
+        self.addCleanup(engine_mod.mpv_has_option.cache_clear)
+        with mock.patch("senada.engine.subprocess.run",
+                        return_value=mock.Mock(stdout=listing)):
+            self.assertTrue(engine_mod.mpv_has_option("mpv-a", "curl-enabled"))
+            self.assertFalse(engine_mod.mpv_has_option("mpv-a", "curl"))
+        with mock.patch("senada.engine.subprocess.run", side_effect=OSError):
+            self.assertFalse(engine_mod.mpv_has_option("mpv-b", "curl-enabled"))
 
 
 class StoppedMpv(unittest.TestCase):

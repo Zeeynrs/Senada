@@ -8,6 +8,7 @@ QLocalSocket speaks both, and runs on the Qt event loop so no reader thread is n
 """
 
 import atexit
+import functools
 import json
 import logging
 import os
@@ -100,6 +101,17 @@ def find_tool(name: str) -> str | None:
     else:
         candidates += [Path("/usr/bin") / name, Path("/usr/local/bin") / name, Path.home() / ".local" / "bin" / name]
     return next((str(p) for p in candidates if p.is_file()), None)
+
+
+@functools.lru_cache(maxsize=4)
+def mpv_has_option(mpv_bin: str, option: str) -> bool:
+    """Whether this mpv knows `--option` (an unknown one would stop it from starting)."""
+    try:
+        res = subprocess.run([mpv_bin, "--no-config", "--list-options"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=5, creationflags=NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return any(line.split()[:1] == [f"--{option}"] for line in res.stdout.splitlines())
 
 
 def filter_audio_devices(raw: list[dict], active_id: str = "auto") -> list[dict]:
@@ -254,6 +266,10 @@ class AudioEngine(QObject):
             "--gapless-audio=weak",
             "--prefetch-playlist=yes",  # opens the queued next track while the current one is ending
         ]
+        # mpv 0.42 opens web addresses with its new libcurl backend, which on Windows can hang on a
+        # YouTube stream without ever timing out (silence, no error); FFmpeg's networking does not
+        if mpv_has_option(mpv_bin, "curl-enabled"):
+            cmd.append("--curl-enabled=no")
         # stream addresses Senada resolved itself never go through the (slow) yt-dlp hook
         # (the pattern is matched against the address after its "https://")
         script_opts = ["ytdl_hook-exclude=^[^/]*googlevideo%.com/"]
