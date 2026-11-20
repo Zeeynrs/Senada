@@ -13,6 +13,7 @@ from PySide6.QtGui import QImage
 from . import net, ytmusic
 from .config import IS_WINDOWS, PLAYBACK_FILE, read_json, write_private
 from .i18n import tr
+from .lru import BoundedCache
 from .engine import AudioEngine
 from .resolver import AudioResolver
 from .sleep import SleepTimer
@@ -24,6 +25,7 @@ DEFAULT_ACCENT = "#d9d9d9"  # neutral until the album art gives a colour
 BACKGROUND_POSITION_MS = 250  # position updates while Senada is not in view (4 per second)
 MAX_FAIL_STREAK = 3  # songs in a row that would not play before playback stops instead of skipping on
 WINDOWS_AUDIO_IDLE_SECONDS = 300
+TRACK_CACHE_LIMIT = 2000  # tracks remembered from the pages shown (about a few MB)
 
 
 def download(url: str) -> bytes:
@@ -105,7 +107,8 @@ class Player(QObject):
         self._queue = []
         self._queue_index = -1
         self._unshuffled = None  # original upcoming order kept while shuffle is on
-        self._track_cache = {}  # uri -> track_dict
+        # uri -> track dict, for what the pages showed: only the most recent ones are kept
+        self._track_cache = BoundedCache(TRACK_CACHE_LIMIT)
         self._play_token = 0  # bumps on every track change; stale stream lookups are dropped
         self._prefetched = ""  # uri already being resolved ahead of time
         self._started = (0, "")  # (play token, video id) of the file last handed to the engine
@@ -724,13 +727,18 @@ class Player(QObject):
             self.accentChanged.emit()
 
     def cache_tracks(self, tracks: list):
-        for t in tracks or []:
-            if isinstance(t, dict) and t.get("uri"):
-                self._track_cache[t["uri"]] = t
+        self._track_cache.put_many((t["uri"], t) for t in tracks or [] if isinstance(t, dict) and t.get("uri"))
+
+    def _known(self, uri: str) -> dict | None:
+        """A track's metadata without asking the internet: a page showed it, or it is in the queue."""
+        t = self._track_cache.get(uri)
+        if t is None:
+            t = next((q for q in self._queue if q.get("uri") == uri), None)
+        return t
 
     def _lookup(self, uri: str) -> dict | None:
         """Track metadata for a URI: from what the pages showed, else from YouTube Music."""
-        t = self._track_cache.get(uri)
+        t = self._known(uri)
         if t is None and uri.startswith("yt:track:"):
             t = ytmusic.track(uri.split(":", 2)[2])
             if t:
@@ -808,7 +816,7 @@ class Player(QObject):
     def playRadio(self, uri):
         """Play a track followed by YouTube Music's radio for it."""
         if not uri.startswith("yt:track:"):
-            seed = self._track_cache.get(uri)
+            seed = self._known(uri)
             if not seed:
                 return
             fetch = lambda: self._radio_for(seed)
@@ -929,7 +937,7 @@ class Player(QObject):
 
     @Slot(str, bool)
     def setLiked(self, uri, liked):
-        track = self._track_cache.get(uri)
+        track = self._known(uri)
         if track is None and uri == self._state.get("uri"):
             track = {k: self._state.get(k) for k in ("uri", "id", "name", "artists", "artistId", "album",
                                                       "albumId", "imageSmall", "image", "imageLarge",

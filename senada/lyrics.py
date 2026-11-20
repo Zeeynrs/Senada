@@ -28,8 +28,10 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from . import i18n, matching, net, ytmusic
 from .config import CONFIG_DIR, read_json, write_private
+from .lru import BoundedCache
 
 OFFSET_FILE = CONFIG_DIR / "lyrics_offsets.json"
+LYRICS_CACHE_LIMIT = 30  # songs whose lyrics (and translations) stay in memory
 
 LRC_LINE = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 HEADERS = {"User-Agent": "Senada/0.1 (desktop music player)"}
@@ -471,12 +473,13 @@ class Lyrics(QObject):
         self.worker = worker
         self.settings = settings
         self._source = settings["lyrics_source"] if settings["lyrics_source"] in SOURCES else "auto"
-        self._cache = {}  # (uri, source) -> result
+        self._cache = BoundedCache(LYRICS_CACHE_LIMIT)  # (uri, source) -> result, recent songs only
         self._key = ("", "")
         self._raw = []    # the lines as the source gave them
         self._lines = []  # the same, with "sub" (romanization or translation) where asked for
         self._extra = settings["lyrics_extra"] if settings["lyrics_extra"] in EXTRAS else "off"
-        self._translations = {}  # (uri, source, language, lines) -> [translated line, …] ([] while it runs)
+        # (uri, source, language, lines) -> [translated line, …] ([] while it runs), recent songs only
+        self._translations = BoundedCache(LYRICS_CACHE_LIMIT)
         self._times = []
         self._synced = False
         self._status = "idle"
