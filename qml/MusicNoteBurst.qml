@@ -6,7 +6,10 @@ Item {
     id: burst
     property int count: 22
     readonly property var glyphs: ["note", "music"]
-    readonly property var colors: [Theme.primary, "#6ce5bd", "#72caff", "#edc981", "#cfb7ff", "#ff8fb1"]
+    // pastel on the dark theme; deeper versions of the same colours stay clear on white
+    readonly property var colors: Theme.dark
+        ? [Theme.primary, "#6ce5bd", "#72caff", "#edc981", "#cfb7ff", "#ff8fb1"]
+        : [Theme.primary, "#0ca678", "#1c7ed6", "#f08c00", "#7048e8", "#e64980"]
     readonly property int flying: notes.length
     property var notes: []
 

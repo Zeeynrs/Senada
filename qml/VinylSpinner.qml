@@ -1,10 +1,13 @@
 import QtQuick
 
-// A small vinyl record that spins while something works, then pops with a ring of the accent
-// colour when it is done (Settings → Storage → Clear cache).
+// A small vinyl record that spins while something works, then pops with a coloured ring
+// when it is done (Settings → Storage → Clear cache).
 Item {
     id: vinyl
     property bool spinning: false
+    // the label and the ring of the pop: the accent, or mint where the accent is plain black/white
+    // (it would vanish on the black record)
+    property color glow: Theme.accented ? Theme.primary : Theme.dark ? "#6ce5bd" : "#0ca678"
     signal popped()              // the pop has finished: time for whatever comes next
     implicitWidth: 30
     implicitHeight: 30
@@ -23,7 +26,7 @@ Item {
     }
     onSpinningChanged: if (spinning) { reset(); spin.restart() }
 
-    // the record: black disc, two grooves, a label in the accent colour and the hole
+    // the record: black disc, two grooves, a coloured label and the hole
     Item {
         id: disc
         anchors.fill: parent
@@ -52,7 +55,7 @@ Item {
             width: disc.width * 0.38
             height: width
             radius: width / 2
-            color: Theme.primary
+            color: vinyl.glow
             // a light glint, so the turning can be seen
             Rectangle {
                 x: parent.width * 0.18; y: parent.height * 0.14
@@ -76,7 +79,7 @@ Item {
         radius: width / 2
         color: "transparent"
         border.width: 2
-        border.color: Theme.primary
+        border.color: vinyl.glow
         opacity: 0
         scale: 0.6
     }
