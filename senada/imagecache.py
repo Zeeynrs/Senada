@@ -12,10 +12,12 @@ import os
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
 from .config import CACHE_DIR
+from .downloads import human_size
+from .i18n import tr
 
 logger = logging.getLogger("senada.imagecache")
 
@@ -57,11 +59,42 @@ def trim(folder: Path, limit: int):
             break
 
 
+def folder_size(folder: Path) -> int:
+    try:
+        return sum(e.stat().st_size for e in os.scandir(folder) if e.is_file())
+    except OSError:
+        return 0
+
+
+def clear_folder(folder: Path) -> int:
+    """Delete every saved cover; the bytes freed."""
+    freed = 0
+    try:
+        entries = list(os.scandir(folder))
+    except OSError:
+        return 0
+    for e in entries:
+        try:
+            if e.is_file():
+                size = e.stat().st_size
+                os.remove(e.path)
+                freed += size
+        except OSError:
+            continue  # in use (Windows) or already gone: the next clear takes it
+    return freed
+
+
 class ImageCache(QObject):
     """`images` in QML: cached(url) gives the saved file, or "" while it is being downloaded
     (stored(url) follows), or the address itself when it cannot be cached."""
 
     stored = Signal(str)
+    sizeChanged = Signal()
+    busyChanged = Signal()
+    cleared = Signal()          # also for the caches kept in memory (main.py)
+    toast = Signal(str)
+    _measured = Signal(int)     # from the helper threads
+    _emptied = Signal(int)
 
     def __init__(self, folder: Path | None = None, limit: int = IMAGE_CACHE_BYTES, parent=None):
         super().__init__(parent)
@@ -74,6 +107,10 @@ class ImageCache(QObject):
         self._failed = set()    # urls loaded directly from the internet instead
         self._touched = set()   # file names already marked as used this session
         self._saved = 0
+        self._size = 0
+        self._busy = False
+        self._measured.connect(self._on_measured)
+        self._emptied.connect(self._on_emptied)
         try:
             self.folder.mkdir(parents=True, exist_ok=True)
             self._ok = True
@@ -104,12 +141,58 @@ class ImageCache(QObject):
 
     @Slot(str)
     def forget(self, url: str):
-        """The saved copy could not be shown: remove it and load this cover from the internet."""
+        """The saved copy could not be shown. Damaged: remove it and load this cover from the
+        internet. Gone (the cache was cleared): download it again."""
+        path = self._path(url)
+        self._touched.discard(path.name)
+        if not path.exists():
+            return
         self._failed.add(url)
         try:
-            self._path(url).unlink(missing_ok=True)
+            path.unlink()
         except OSError:
             pass
+
+    # ---- Settings → Profile & Library → Cache ---------------------------------------------
+
+    @Property(str, notify=sizeChanged)
+    def sizeText(self):
+        return human_size(self._size)
+
+    @Property(bool, notify=busyChanged)
+    def busy(self):
+        return self._busy
+
+    @Slot()
+    def measure(self):
+        if self._ok:
+            threading.Thread(target=lambda: self._measured.emit(folder_size(self.folder)),
+                             daemon=True, name="senada-image-size").start()
+
+    @Slot()
+    def clear(self):
+        """Delete the saved covers (they download again when shown). The library, offline songs
+        and settings are elsewhere and stay."""
+        if self._busy:
+            return
+        self._busy = True
+        self.busyChanged.emit()
+        threading.Thread(target=lambda: self._emptied.emit(clear_folder(self.folder) if self._ok else 0),
+                         daemon=True, name="senada-image-clear").start()
+
+    def _on_measured(self, size: int):
+        if size != self._size:
+            self._size = size
+            self.sizeChanged.emit()
+
+    def _on_emptied(self, freed: int):
+        self._failed.clear()
+        self._touched.clear()
+        self._busy = False
+        self.busyChanged.emit()
+        self.cleared.emit()
+        self.toast.emit(tr("Cache cleared · {size} freed", size=human_size(freed)))
+        self.measure()  # what is left: covers saved while it ran
 
     def _fetch(self, url: str):
         if url in self._pending:

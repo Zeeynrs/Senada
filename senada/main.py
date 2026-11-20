@@ -109,6 +109,10 @@ def main():
         lyrics.refreshExtra()
 
     session.languageChanged.connect(on_language)
+
+    def on_cache_cleared():  # Settings → Clear cache: pages and lyrics are fetched afresh too
+        catalog.clear()
+        lyrics.clear_cache()
     session.changed.connect(player.applyAudioSettings)
     lyrics = Lyrics(player, worker, settings, downloads)
     lyrics.localfiles = localfiles
@@ -133,6 +137,8 @@ def main():
     remote.toast.connect(session.toast)
     backup = Backup(store, settings)
     images = ImageCache()  # cover art kept on disk between starts
+    images.toast.connect(session.toast)
+    images.cleared.connect(on_cache_cleared)
     backup.toast.connect(session.toast)
     backup.restored.connect(library.reload)
     backup.restartRequested.connect(request_restart)  # restored settings apply from the next start

@@ -69,7 +69,7 @@ Popup {
           words: ["Keyboard shortcuts", "Play / pause", "Search", "Volume up / down", "Next / previous song", "Mini player"] },
         { group: "Preferences", key: "profile", icon: "person", title: "Profile & Library",
           desc: "Your name and the music kept on this device.",
-          words: ["Music folders", "Local files", "Add folder", "Scan again", "Backup", "Back up", "Restore", "Automatic backups", "Offline songs", "Download", "Downloads", "Offline", "Open folder", "Display name", "Import a playlist", "Import from Spotify", "Spotify", "YouTube Music", "YouTube", "Import", "Playlist"] },
+          words: ["Music folders", "Local files", "Add folder", "Scan again", "Backup", "Back up", "Restore", "Automatic backups", "Offline songs", "Download", "Downloads", "Offline", "Open folder", "Display name", "Cache", "Clear cache", "Storage", "Import a playlist", "Import from Spotify", "Spotify", "YouTube Music", "YouTube", "Import", "Playlist"] },
         { group: "App", key: "whatsnew", icon: "new", title: "What's new",
           desc: "What changed in each version, and which version is on this device.",
           words: ["Changelog", "Log", "Release", "Version", "On this device", "Version history"] },
@@ -1586,6 +1586,59 @@ Popup {
                 NButton {
                     text: I18n.t("Open folder")
                     onClicked: downloads.openFolder()
+                }
+            }
+            Divider {}
+            // like the Storage settings of other music players: what the cache holds, how big it
+            // is, and what clearing it leaves alone (senada/imagecache.py)
+            SettingRow {
+                label: I18n.t("Cache")
+                hint: I18n.t("{size} of saved covers, so they show at once. Clearing it does not remove offline songs, your library or settings.",
+                             { size: images.sizeText })
+                Component.onCompleted: images.measure()
+                NButton {
+                    objectName: "clearCacheButton"
+                    text: images.busy ? I18n.t("Clearing…") : I18n.t("Clear cache…")
+                    enabled: !images.busy
+                    onClicked: clearCacheDialog.open()
+                }
+            }
+            Popup {
+                id: clearCacheDialog
+                objectName: "clearCacheDialog"
+                parent: Overlay.overlay
+                anchors.centerIn: parent
+                width: Math.min(440, parent ? parent.width - 48 : 440)
+                modal: true
+                focus: true
+                padding: 24
+                background: Rectangle { radius: 16; color: Theme.surface2; border.color: Theme.line }
+                Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.45) }
+                contentItem: ColumnLayout {
+                    spacing: 16
+                    Label {
+                        text: I18n.t("Clear the cache?")
+                        font.pixelSize: 20
+                        font.weight: Font.Bold
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: Theme.dim
+                        text: I18n.t("Saved covers ({size}) are deleted and download again when you see them. Offline songs, your library and settings stay.",
+                                     { size: images.sizeText })
+                    }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignRight
+                        spacing: 8
+                        NButton { text: I18n.t("Cancel"); onClicked: clearCacheDialog.close() }
+                        NButton {
+                            objectName: "confirmClearCache"
+                            primary: true
+                            text: I18n.t("Clear cache")
+                            onClicked: { images.clear(); clearCacheDialog.close() }
+                        }
+                    }
                 }
             }
             Divider {}

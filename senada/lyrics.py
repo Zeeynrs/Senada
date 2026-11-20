@@ -611,6 +611,12 @@ class Lyrics(QObject):
         """The interface language changed: translations follow it."""
         self._decorate()
 
+    def clear_cache(self):
+        """Forget lyrics and translations found earlier (Settings → Clear cache); the lyrics shown
+        now stay on screen."""
+        self._cache.clear()
+        self._translations.clear()
+
     def _subs(self) -> list[str]:
         lines = self._raw
         if not lines:  # still loading: nothing to romanize or translate yet

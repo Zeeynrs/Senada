@@ -147,6 +147,47 @@ class DiskCache(unittest.TestCase):
         self.assertEqual(cache.cached(self.url), self.url)
         self.assertEqual(list(self.folder.iterdir()), [])
 
+    def wait_for(self, signal):
+        loop = QEventLoop()
+        got = []
+        signal.connect(lambda *args: (got.append(args), loop.quit()))
+        QTimer.singleShot(10000, loop.quit)
+        loop.exec()
+        return got
+
+    def test_clear_deletes_the_saved_covers_and_says_how_much(self):
+        cache = self.cache()
+        cache.cached(self.url)
+        self.wait_stored(cache)
+        cache.measure()
+        self.wait_for(cache.sizeChanged)
+        self.assertNotEqual(cache.property("sizeText"), "0 B")
+        toasts, cleared = [], []
+        cache.toast.connect(toasts.append)
+        cache.cleared.connect(lambda: cleared.append(True))
+        cache.clear()
+        self.assertTrue(cache.property("busy"))
+        self.wait_for(cache.cleared)
+        self.assertFalse(cache.property("busy"))
+        self.assertEqual(list(self.folder.iterdir()), [])
+        self.assertEqual(cleared, [True])
+        self.assertEqual(len(toasts), 1)
+        self.assertIn(f"{len(PNG)} B", toasts[0])
+        self.wait_for(cache.sizeChanged)
+        self.assertEqual(cache.property("sizeText"), "0 B")
+
+    def test_a_cover_shown_before_clearing_downloads_again(self):
+        cache = self.cache()
+        cache.cached(self.url)
+        self.wait_stored(cache)
+        cache.clear()
+        self.wait_for(cache.cleared)
+        cache.forget(self.url)  # Cover could not read the deleted file
+        self.assertEqual(cache.cached(self.url), "")  # fetched again, not given up on
+        self.wait_stored(cache)
+        self.assertTrue(cache.cached(self.url).startswith("file://"))
+        self.assertEqual(len(self.requests), 2)
+
     def test_other_addresses_pass_through(self):
         cache = self.cache()
         for url in ("https://example.com/a.jpg", "file:///music/cover.jpg", "image://x/1", ""):
@@ -221,6 +262,8 @@ class CoverUsesTheCache(DiskCache):
     test_a_non_image_answer_falls_back_to_the_address = None
     test_other_addresses_pass_through = None
     test_a_damaged_copy_is_forgotten = None
+    test_clear_deletes_the_saved_covers_and_says_how_much = None
+    test_a_cover_shown_before_clearing_downloads_again = None
 
 
 if __name__ == "__main__":
