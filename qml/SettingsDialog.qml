@@ -1730,17 +1730,82 @@ Popup {
             Divider {}
             // like the Storage settings of other music players: what the cache holds, how big it
             // is, and what clearing it leaves alone (senada/imagecache.py)
+            // clearing it is a small show: a record spins while the covers go, pops when they are
+            // gone, music notes burst out and the size counts down to nothing
             SettingRow {
+                id: cacheRow
+                objectName: "cacheRow"
+                property string phase: "idle"   // "spinning" while clearing, "celebrate" after
+                property real startBytes: 0
+                property real shownBytes: 0
+                property double spinSince: 0
+                function startClear() {
+                    startBytes = images.sizeBytes
+                    shownBytes = startBytes
+                    spinSince = Date.now()
+                    phase = "spinning"
+                    images.clear()
+                }
+                function celebrate() {
+                    phase = "celebrate"
+                    const p = cacheVinyl.mapToItem(noteBurst, cacheVinyl.width / 2, cacheVinyl.height / 2)
+                    cacheVinyl.pop()
+                    noteBurst.play(p.x, p.y)
+                    countDown.restart()
+                }
+                // the same steps as human_size() in senada/downloads.py
+                function humanSize(n) {
+                    for (const unit of ["B", "KB", "MB"]) {
+                        if (n < 1024)
+                            return unit === "MB" ? n.toFixed(1) + " MB" : Math.round(n) + " " + unit
+                        n /= 1024
+                    }
+                    return n.toFixed(2) + " GB"
+                }
                 label: I18n.t("Cache")
                 hint: I18n.t("{size} of saved covers, so they show at once. Clearing it does not remove offline songs, your library or settings.",
-                             { size: images.sizeText })
+                             { size: phase === "idle" ? images.sizeText : humanSize(shownBytes) })
                 Component.onCompleted: images.measure()
+                Connections {
+                    target: images
+                    function onCleared() {
+                        if (cacheRow.phase !== "spinning")
+                            return
+                        // even a cache that empties at once gets to spin for a moment
+                        celebrateTimer.interval = Math.max(0, 750 - (Date.now() - cacheRow.spinSince))
+                        celebrateTimer.restart()
+                    }
+                }
+                Timer { id: celebrateTimer; onTriggered: cacheRow.celebrate() }
+                NumberAnimation {
+                    id: countDown
+                    target: cacheRow
+                    property: "shownBytes"
+                    to: 0
+                    duration: 650
+                    easing.type: Easing.OutCubic
+                }
+                VinylSpinner {
+                    id: cacheVinyl
+                    objectName: "cacheVinyl"
+                    visible: cacheRow.phase !== "idle"
+                    spinning: cacheRow.phase === "spinning"
+                    onPopped: cacheRow.phase = "idle"
+                }
                 NButton {
                     objectName: "clearCacheButton"
-                    text: images.busy ? I18n.t("Clearing…") : I18n.t("Clear cache…")
-                    enabled: !images.busy
+                    text: cacheRow.phase === "spinning" || images.busy ? I18n.t("Clearing…") : I18n.t("Clear cache…")
+                    enabled: cacheRow.phase === "idle" && !images.busy
                     onClicked: clearCacheDialog.open()
                 }
+            }
+            // the notes fly over the whole dialog, not only this page
+            MusicNoteBurst {
+                id: noteBurst
+                objectName: "noteBurst"
+                parent: dlg.parent   // the overlay (this page is made before it is in a window)
+                anchors.fill: parent
+                z: 10000
             }
             Popup {
                 id: clearCacheDialog
@@ -1775,7 +1840,7 @@ Popup {
                             objectName: "confirmClearCache"
                             primary: true
                             text: I18n.t("Clear cache")
-                            onClicked: { images.clear(); clearCacheDialog.close() }
+                            onClicked: { cacheRow.startClear(); clearCacheDialog.close() }
                         }
                     }
                 }

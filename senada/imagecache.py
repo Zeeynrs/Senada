@@ -159,6 +159,11 @@ class ImageCache(QObject):
     def sizeText(self):
         return human_size(self._size)
 
+    @Property(float, notify=sizeChanged)
+    def sizeBytes(self):
+        """The same, as a number: Settings counts it down while the cache is cleared."""
+        return float(self._size)
+
     @Property(bool, notify=busyChanged)
     def busy(self):
         return self._busy

@@ -34,7 +34,7 @@ def install(session, window):
     shell = window.findChild(QObject, "shell")
 
     def wait_for(condition, message):
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 4
         while not condition():
             assert time.monotonic() < deadline, message
             QTest.qWait(25)
@@ -55,6 +55,14 @@ def install(session, window):
             wait_for(lambda: dialog.property("opened"), "Clear cache did not ask first")
             assert (imagecache.IMAGE_CACHE / "saved-cover").exists(), "Cleared before confirming"
             QMetaObject.invokeMethod(find("confirmClearCache"), "clicked")
+            # the show: a spinning record, then a burst of notes that all clean themselves up
+            vinyl, burst = find("cacheVinyl"), find("noteBurst")
+            wait_for(lambda: vinyl.isVisible() and vinyl.property("spinning"), "The record does not spin")
+            wait_for(lambda: burst.property("flying") > 0, "No music notes burst out")
+            assert burst.parentItem() is not None, "The notes have nowhere to be drawn"
+            wait_for(lambda: not vinyl.isVisible(), "The record did not pop")
+            wait_for(lambda: burst.property("flying") == 0, "Music notes were left behind")
+            assert button.property("enabled"), "The button stayed disabled"
             wait_for(lambda: not (imagecache.IMAGE_CACHE / "saved-cover").exists(), "Cache was not cleared")
             wait_for(lambda: any("2 KB" in t for t in toasts), f"No toast: {toasts}")
             wait_for(lambda: not dialog.property("visible"), "Dialog stayed open")

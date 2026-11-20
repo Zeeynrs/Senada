@@ -73,3 +73,5 @@ RestoreDialog 1.0 RestoreDialog.qml
 StatsPage 1.0 StatsPage.qml
 StreakEmblem 1.0 StreakEmblem.qml
 StreakCard 1.0 StreakCard.qml
+VinylSpinner 1.0 VinylSpinner.qml
+MusicNoteBurst 1.0 MusicNoteBurst.qml
