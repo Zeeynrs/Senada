@@ -103,7 +103,7 @@ Then open **Senada** from your app launcher or run `senada`. The installer suppo
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/immersive.webp" alt="Senada's full-screen player with a circular visualizer and synced lyrics" width="100%">
+      <img src="docs/screenshots/immersive.webp" alt="Senada's full-screen player with a large cover, a music spectrum on the seek bar and synced lyrics" width="100%">
       <p><b>Give the music the whole screen</b><br>Visualizer, vinyl, poster or cinema.<br><i>Bawa suasana lagu ke layar penuh.</i></p>
     </td>
     <td width="50%" valign="top">
