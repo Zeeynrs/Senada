@@ -370,6 +370,10 @@ class Downloads(QObject):
     def sizeText(self):
         return human_size(self.total_size())
 
+    @Property(float, notify=changed)
+    def sizeBytes(self):
+        return float(self.total_size())
+
     @Property(str, constant=True)
     def folderPath(self):
         return str(self.folder)

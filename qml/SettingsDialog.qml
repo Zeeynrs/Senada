@@ -14,11 +14,11 @@ Popup {
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(1000, parent ? parent.width - 64 : 1000)
-    height: Math.min(700, parent ? parent.height - 64 : 700)
+    width: Math.min(1060, parent ? parent.width - 48 : 1060)
+    height: Math.min(744, parent ? parent.height - 48 : 744)
     modal: true
     focus: true
-    padding: 8
+    padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     function openAt(key) {
@@ -28,39 +28,51 @@ Popup {
         open()
     }
 
-    readonly property color paneLeft: Theme.liquid ? Theme.glassFill : Theme.dark ? "#161616" : "#f1f1f1"
-    readonly property color paneRight: Theme.liquid ? Theme.alpha(Theme.glassTint, 0.68) : Theme.dark ? "#0d0d0d" : "#ffffff"
+    readonly property int sidebarWidth: Math.max(236, Math.min(248, Math.round(width * 0.24)))
+    readonly property int contentGutter: width < 940 ? 20 : 28
+    readonly property color paneLeft: Theme.liquid ? Theme.glassFill
+                                       : Theme.dark ? Theme.mix(Theme.sidebarSolid, Theme.bgSolid, 0.6) : Theme.sidebarSolid
+    readonly property color cardColor: Theme.liquid ? Theme.surface : Theme.surface2
 
     // `words` are English labels inside the section, searched in both languages
     readonly property var sections: [
-        { group: "Preferences", key: "appearance", icon: "palette", title: "Appearance",
-          desc: "Language, theme, colors and glass.",
-          words: ["Interface language", "Language", "Theme", "Color mode", "Dark", "Light", "Follow system",
-                  "Accent color", "Accent strength", "Color", "Logo", "Follow the song",
-                  "Glass effect", "Glass thickness", "Liquid Glass", "Transparent", "Album cover"] },
-        { group: "Preferences", key: "player", icon: "play", title: "Player",
-          desc: "The full view, the seek bar and the player bar.",
-          words: ["Full view style", "Full view", "Visualizer", "Vinyl record", "Turntable", "Poster", "Magazine",
-                  "Cinema", "Movie", "Subtitles",
-                  "Seek bar", "Progress bar", "Wave", "Waveform", "Dots", "Player bar", "Docked", "Floating"] },
-        { group: "Preferences", key: "miniplayer", icon: "mini-player", title: "Mini player & tray",
-          desc: "The small player while Senada is minimized, and the icon next to the clock.",
-          words: ["Mini player", "Dynamic island", "Minimize", "Mini player style", "Classic", "Sound wave",
-                  "Running lyrics", "Cover glass", "Tuck into the top edge", "Notch",
-                  "System tray", "Tray", "Icon in the system tray", "Keep playing when closed"] },
-        { group: "Preferences", key: "audio", icon: "speaker", title: "Audio",
+        { group: "Playback", key: "audio", icon: "speaker", title: "Audio",
           desc: "Audio engine and streaming quality.",
           words: ["Engine status", "Device name", "Audio quality", "MPV", "Audio engine & streaming (MPV)",
                   "Even out loudness", "Normalize", "Loudness", "Volume", "Skip silence", "Silence", "Crossfade", "Gapless",
                   "Autoplay", "Similar music"] },
-        { group: "Preferences", key: "lyrics", icon: "lyrics", title: "Lyrics",
+        { group: "Playback", key: "lyrics", icon: "lyrics", title: "Lyrics",
           desc: "Where synced lyrics come from.",
           words: ["Lyrics source", "Automatic", "BetterLyrics", "LRCLIB", "KuGou", "YouTube Music", "NetEase", "Synced lyrics",
                   "Under each line", "Romanization", "Translation", "Translate with Google Translate", "Romaji",
                   "Appearance", "Size", "Font", "Alignment", "Sung line", "Karaoke", "Glow", "Serif"] },
-        { group: "Preferences", key: "shortcuts", icon: "keyboard", title: "Shortcuts",
+        { group: "Playback", key: "shortcuts", icon: "keyboard", title: "Shortcuts",
           desc: "Keyboard shortcuts that work anywhere in the app.",
           words: ["Keyboard shortcuts", "Play / pause", "Search", "Volume up / down", "Next / previous song", "Mini player"] },
+        { group: "Interface", key: "appearance", icon: "palette", title: "Appearance",
+          desc: "Language, theme, colors and glass.",
+          words: ["Interface language", "Language", "Theme", "Color mode", "Dark", "Light", "Follow system",
+                  "Accent color", "Accent strength", "Color", "Logo", "Follow the song",
+                  "Glass effect", "Glass thickness", "Liquid Glass", "Transparent", "Album cover"] },
+        { group: "Interface", key: "player", icon: "play", title: "Player",
+          desc: "The full view, the seek bar and the player bar.",
+          words: ["Full view style", "Full view", "Visualizer", "Vinyl record", "Turntable", "Poster", "Magazine",
+                  "Cinema", "Movie", "Subtitles",
+                  "Seek bar", "Progress bar", "Wave", "Waveform", "Dots", "Player bar", "Docked", "Floating"] },
+        { group: "Interface", key: "miniplayer", icon: "mini-player", title: "Mini player & tray",
+          desc: "The small player while Senada is minimized, and the icon next to the clock.",
+          words: ["Mini player", "Dynamic island", "Minimize", "Mini player style", "Classic", "Sound wave",
+                  "Running lyrics", "Cover glass", "Tuck into the top edge", "Notch",
+                  "System tray", "Tray", "Icon in the system tray", "Keep playing when closed"] },
+        { group: "Integrations", key: "discord", icon: "presence", title: "Discord",
+          desc: "Show what you are listening to on your Discord profile.",
+          words: ["Rich Presence", "Discord", "Listening to", "Show the song on Discord", "While paused", "Status"] },
+        { group: "Integrations", key: "scrobble", icon: "stats", title: "Scrobbling",
+          desc: "Add the songs you play to your Last.fm or Libre.fm profile.",
+          words: ["Scrobbling", "Scrobble", "Last.fm", "Libre.fm", "Connect", "Disconnect"] },
+        { group: "Integrations", key: "remote", icon: "smartphone", title: "Phone remote",
+          desc: "Control Senada from your phone's browser.",
+          words: ["Phone", "Remote", "QR", "Phone remote", "Control from your phone", "New link", "Copy link"] },
         { group: "Your music", key: "profile", icon: "person", title: "Profile",
           desc: "Your name, and the music kept on this device without an account.",
           words: ["Display name", "Name", "Account"] },
@@ -68,21 +80,12 @@ Popup {
           desc: "Playlists from other services and music folders on this computer.",
           words: ["Import a playlist", "Import from Spotify", "Spotify", "YouTube Music", "YouTube", "Import", "Playlist",
                   "Music folders", "Local files", "Add folder", "Scan again"] },
-        { group: "Your music", key: "storage", icon: "storage", title: "Storage",
-          desc: "Offline songs and the cache on this device.",
-          words: ["Offline songs", "Download", "Downloads", "Offline", "Open folder", "Cache", "Clear cache"] },
         { group: "Your music", key: "backup", icon: "backup", title: "Backup",
           desc: "Keep a copy of your library, or move it to another computer.",
           words: ["Backup", "Back up", "Restore", "Automatic backups"] },
-        { group: "Connections", key: "discord", icon: "presence", title: "Discord",
-          desc: "Show what you are listening to on your Discord profile.",
-          words: ["Rich Presence", "Discord", "Listening to", "Show the song on Discord", "While paused", "Status"] },
-        { group: "Connections", key: "scrobble", icon: "stats", title: "Scrobbling",
-          desc: "Add the songs you play to your Last.fm or Libre.fm profile.",
-          words: ["Scrobbling", "Scrobble", "Last.fm", "Libre.fm", "Connect", "Disconnect"] },
-        { group: "Connections", key: "remote", icon: "smartphone", title: "Phone remote",
-          desc: "Control Senada from your phone's browser.",
-          words: ["Phone", "Remote", "QR", "Phone remote", "Control from your phone", "New link", "Copy link"] },
+        { group: "App", key: "storage", icon: "storage", title: "Cache & storage",
+          desc: "Offline songs and the cache on this device.",
+          words: ["Storage", "Offline songs", "Download", "Downloads", "Offline", "Open folder", "Cache", "Saved covers", "Clear cache"] },
         { group: "App", key: "whatsnew", icon: "new", title: "What's new",
           desc: "What changed in each version, and which version is on this device.",
           words: ["Changelog", "Log", "Release", "Version", "On this device", "Version history"] },
@@ -93,7 +96,7 @@ Popup {
           desc: "About Senada.",
           words: ["Version", "License", "Senada"] }
     ]
-    readonly property var groups: ["Preferences", "Your music", "Connections", "App"]
+    readonly property var groups: ["Playback", "Interface", "Integrations", "Your music", "App"]
 
     function matches(s) {
         const q = query.trim().toLowerCase()
@@ -126,8 +129,7 @@ Popup {
     }
     background: Rectangle {
         radius: 20
-        color: Theme.liquid ? "transparent" : dlg.paneLeft
-        border.color: Theme.line
+        color: Theme.liquid ? "transparent" : Theme.bgSolid
         Loader {
             anchors.fill: parent
             active: Theme.liquid
@@ -135,6 +137,26 @@ Popup {
                 radius: 20
                 materialColor: Theme.alpha(Theme.glassTint, Theme.dark ? 0.85 : 0.8)
             }
+        }
+        Rectangle {
+            width: dlg.sidebarWidth
+            height: parent.height
+            radius: 20
+            topRightRadius: 0
+            bottomRightRadius: 0
+            color: dlg.paneLeft
+        }
+        Rectangle {
+            x: dlg.sidebarWidth - 1
+            width: 1
+            height: parent.height
+            color: Theme.line
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: 20
+            color: "transparent"
+            border.color: Theme.line
         }
     }
 
@@ -144,21 +166,41 @@ Popup {
         id: sr
         property string label
         property string hint
+        property string iconName
         Layout.fillWidth: true
         Layout.topMargin: 14
         Layout.bottomMargin: 14
-        spacing: 20
+        spacing: 16
+        Rectangle {
+            visible: sr.iconName !== ""
+            implicitWidth: 36
+            implicitHeight: 36
+            radius: 10
+            color: Theme.surface3
+            Icon {
+                anchors.centerIn: parent
+                glyph: sr.iconName
+                size: 18
+                color: Theme.dim
+            }
+        }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 3
-            Label { text: sr.label; font.pixelSize: 14; font.weight: Font.DemiBold }
+            Label {
+                Layout.fillWidth: true
+                text: sr.label
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+            }
             Label {
                 visible: text !== ""
                 Layout.fillWidth: true
                 text: sr.hint
                 color: Theme.dim
                 font.pixelSize: 12
-                wrapMode: Text.WordWrap
+                wrapMode: Text.Wrap
             }
         }
     }
@@ -192,6 +234,29 @@ Popup {
         Layout.fillWidth: true
         implicitHeight: 1
         color: Theme.line
+    }
+    component SettingsCard: Rectangle {
+        radius: 14
+        color: dlg.cardColor
+        border.color: Theme.line
+    }
+    component StorageLegend: RowLayout {
+        id: legend
+        property color swatch
+        property alias text: legendLabel.text
+        spacing: 6
+        Rectangle {
+            implicitWidth: 8
+            implicitHeight: 8
+            radius: 4
+            color: legend.swatch
+        }
+        Label {
+            id: legendLabel
+            color: Theme.dim
+            font.pixelSize: 13
+            font.features: { "tnum": 1 }
+        }
     }
     component Note: Label {
         Layout.fillWidth: true
@@ -661,144 +726,142 @@ Popup {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            anchors.margins: 6
-            width: 232
-            spacing: 2
+            anchors.margins: 16
+            width: dlg.sidebarWidth - 32
+            spacing: 8
 
             NTextField {
                 id: searchField
+                objectName: "settingsSearch"
                 Layout.fillWidth: true
-                Layout.bottomMargin: 8
-                implicitHeight: 38
+                implicitHeight: 40
                 iconName: "search"
                 placeholderText: I18n.t("Search settings…")
+                placeholderTextColor: Theme.dim
+                Accessible.name: placeholderText
                 onTextChanged: dlg.query = text
             }
 
             // the sections scroll on their own when the dialog is shorter than the list
-            Item {
+            Flickable {
+                id: sectionList
+                objectName: "sectionList"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Flickable {
-                    id: sectionList
-                    objectName: "sectionList"
-                    anchors.fill: parent
-                    clip: true
-                    contentHeight: sectionColumn.implicitHeight
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: NScrollBar {}
-                    ColumnLayout {
-                        id: sectionColumn
-                        width: sectionList.width
-                        spacing: 2
-                        Repeater {
-                            model: dlg.groups
-                            ColumnLayout {
-                                id: grp
-                                required property string modelData
-                                readonly property var items: dlg.shown.filter(s => s.group === grp.modelData)
-                                visible: items.length > 0
-                                Layout.fillWidth: true
-                                spacing: 2
-                                Label {
-                                    Layout.topMargin: 10
-                                    Layout.bottomMargin: 4
-                                    leftPadding: 10
-                                    text: I18n.t(grp.modelData)
-                                    color: Theme.faint
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
-                                }
-                                Repeater {
-                                    model: grp.items
-                                    AbstractButton {
-                                        id: entry
-                                        required property var modelData
-                                        objectName: "section-" + modelData.key
-                                        readonly property bool current: dlg.section === modelData.key
-                                        Layout.fillWidth: true
-                                        implicitHeight: 38
-                                        hoverEnabled: true
-                                        focusPolicy: Qt.NoFocus
-                                        onClicked: dlg.section = modelData.key
-                                        // the chosen section scrolls into view, also when Settings opens
-                                        // on one further down (e.g. Nav.go("settings", "about"))
-                                        function reveal() {
-                                            if (!current || sectionList.height <= 0)
-                                                return
-                                            const top = entry.mapToItem(sectionColumn, 0, 0).y
-                                            const above = 30   // room for the group name
-                                            const below = 40   // clear of the fade at the bottom
-                                            const maxY = Math.max(0, sectionList.contentHeight - sectionList.height)
-                                            if (top - above < sectionList.contentY)
-                                                sectionList.contentY = Math.max(0, top - above)
-                                            else if (top + height + below > sectionList.contentY + sectionList.height)
-                                                sectionList.contentY = Math.min(maxY, top + height + below - sectionList.height)
+                clip: true
+                contentHeight: sectionColumn.implicitHeight
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: NScrollBar {}
+                ColumnLayout {
+                    id: sectionColumn
+                    width: sectionList.width - 6
+                    spacing: 14
+                    Repeater {
+                        model: dlg.groups
+                        ColumnLayout {
+                            id: grp
+                            required property string modelData
+                            readonly property var items: dlg.shown.filter(s => s.group === grp.modelData)
+                            visible: items.length > 0
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Label {
+                                Layout.bottomMargin: 3
+                                leftPadding: 10
+                                text: I18n.t(grp.modelData)
+                                color: Theme.dim
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                            }
+                            Repeater {
+                                model: grp.items
+                                AbstractButton {
+                                    id: entry
+                                    required property var modelData
+                                    objectName: "section-" + modelData.key
+                                    readonly property bool current: dlg.section === modelData.key
+                                    text: I18n.t(modelData.title)
+                                    Layout.fillWidth: true
+                                    implicitHeight: 30
+                                    hoverEnabled: true
+                                    focusPolicy: Qt.TabFocus
+                                    onClicked: dlg.section = modelData.key
+                                    // the chosen section scrolls into view, also when Settings opens
+                                    // on one further down (e.g. Nav.go("settings", "about"))
+                                    function reveal() {
+                                        if ((!current && !activeFocus) || sectionList.height <= 0)
+                                            return
+                                        const top = Math.round(entry.mapToItem(sectionColumn, 0, 0).y)
+                                        const above = 28   // room for the group name
+                                        const below = 4
+                                        const maxY = Math.max(0, sectionList.contentHeight - sectionList.height)
+                                        if (top - above < sectionList.contentY)
+                                            sectionList.contentY = Math.max(0, top - above)
+                                        else if (top + height + below > sectionList.contentY + sectionList.height)
+                                            sectionList.contentY = Math.min(maxY, top + height + below - sectionList.height)
+                                    }
+                                    onCurrentChanged: if (current) revealTimer.restart()
+                                    onActiveFocusChanged: if (activeFocus) revealTimer.restart()
+                                    Component.onCompleted: if (current) revealTimer.restart()
+                                    Timer {
+                                        id: revealTimer
+                                        interval: 0
+                                        onTriggered: entry.reveal()
+                                    }
+                                    Connections {
+                                        target: sectionList
+                                        enabled: entry.current
+                                        function onHeightChanged() { entry.reveal() }
+                                        function onContentHeightChanged() { revealTimer.restart() }
+                                    }
+                                    background: Rectangle {
+                                        radius: 9
+                                        color: entry.current ? (Theme.accented ? Theme.selected : Theme.pressed)
+                                                             : entry.down ? Theme.pressed : entry.hovered ? Theme.hover : "transparent"
+                                        border.width: entry.visualFocus ? 1 : 0
+                                        border.color: Theme.lineStrong
+                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                        Rectangle {
+                                            visible: entry.current && Theme.accented
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 3; height: 16; radius: 1.5
+                                            color: Theme.primary
                                         }
-                                        onCurrentChanged: Qt.callLater(reveal)
-                                        Component.onCompleted: Qt.callLater(reveal)
-                                        Connections {
-                                            target: sectionList
-                                            enabled: entry.current
-                                            function onHeightChanged() { Qt.callLater(entry.reveal) }
-                                            function onContentHeightChanged() { Qt.callLater(entry.reveal) }
+                                    }
+                                    contentItem: RowLayout {
+                                        spacing: 9
+                                        Icon {
+                                            Layout.leftMargin: 10
+                                            glyph: entry.modelData.icon
+                                            size: 18
+                                            color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
                                         }
-                                        background: Rectangle {
-                                            radius: 9
-                                            color: entry.current ? (Theme.accented ? Theme.selected : Theme.pressed) : entry.hovered ? Theme.hover : "transparent"
-                                            Behavior on color { ColorAnimation { duration: 120 } }
-                                            Rectangle {
-                                                visible: entry.current && Theme.accented
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: 3; height: 16; radius: 1.5
-                                                color: Theme.primary
-                                            }
-                                        }
-                                        contentItem: RowLayout {
-                                            spacing: 12
-                                            Icon {
-                                                Layout.leftMargin: 10
-                                                glyph: entry.modelData.icon
-                                                size: 18
-                                                color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
-                                            }
-                                            Label {
-                                                Layout.fillWidth: true
-                                                text: I18n.t(entry.modelData.title)
-                                                font.pixelSize: 14
-                                                font.weight: entry.current ? Font.DemiBold : Font.Normal
-                                                color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
-                                                elide: Text.ElideRight
-                                            }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            Layout.rightMargin: 8
+                                            text: entry.text
+                                            font.pixelSize: 13
+                                            font.weight: entry.current ? Font.DemiBold : Font.Normal
+                                            color: entry.current ? Theme.accentInk : Theme.text
+                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
                             }
                         }
-
-                        Label {
-                            visible: dlg.shown.length === 0
-                            Layout.fillWidth: true
-                            Layout.topMargin: 12
-                            leftPadding: 10
-                            rightPadding: 10
-                            text: I18n.t("No settings match “{q}”.", { q: dlg.query.trim() })
-                            color: Theme.dim
-                            font.pixelSize: 13
-                            wrapMode: Text.WordWrap
-                        }
                     }
-                }
-                // a soft fade at the bottom says there are more sections below
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 36
-                    visible: !sectionList.atYEnd
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: Theme.alpha(dlg.paneLeft, 0) }
-                        GradientStop { position: 1; color: dlg.paneLeft }
+
+                    Label {
+                        visible: dlg.shown.length === 0
+                        Layout.fillWidth: true
+                        Layout.topMargin: 12
+                        leftPadding: 10
+                        rightPadding: 10
+                        text: I18n.t("No settings match “{q}”.", { q: dlg.query.trim() })
+                        color: Theme.dim
+                        font.pixelSize: 13
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
@@ -809,17 +872,22 @@ Popup {
                 Layout.fillWidth: true
                 implicitHeight: 52
                 hoverEnabled: true
-                focusPolicy: Qt.NoFocus
-                onClicked: dlg.section = "profile"
+                focusPolicy: Qt.TabFocus
+                Accessible.name: I18n.t("Profile")
+                onClicked: {
+                    searchField.clear()
+                    dlg.section = "profile"
+                }
                 background: Rectangle {
-                    radius: 10
-                    color: me.hovered ? Theme.hover : "transparent"
+                    radius: 12
+                    color: me.down || dlg.section === "profile" ? Theme.pressed : me.hovered ? Theme.pressed : Theme.hover
+                    border.color: me.visualFocus ? Theme.lineStrong : Theme.line
                 }
                 contentItem: RowLayout {
                     spacing: 10
                     Rectangle {
-                        Layout.leftMargin: 8
-                        implicitWidth: 34; implicitHeight: 34; radius: 17
+                        Layout.leftMargin: 10
+                        implicitWidth: 32; implicitHeight: 32; radius: 10
                         color: Theme.surface3
                         Label {
                             anchors.centerIn: parent
@@ -854,41 +922,45 @@ Popup {
                             elide: Text.ElideRight
                         }
                     }
+                    Icon {
+                        Layout.rightMargin: 10
+                        glyph: "chevron-right"
+                        size: 16
+                        color: Theme.dim
+                    }
                 }
             }
         }
 
         // ---- right: the chosen section ---------------------------------------------------
-        Rectangle {
-            id: right
-            anchors.left: left.right
-            anchors.leftMargin: 14
+        Item {
+            anchors.left: parent.left
+            anchors.leftMargin: dlg.sidebarWidth
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            radius: 14
-            color: dlg.paneRight
-            border.color: Theme.line
 
             ColumnLayout {
                 id: head
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.leftMargin: 28
-                anchors.rightMargin: 64
+                anchors.leftMargin: dlg.contentGutter
+                anchors.rightMargin: dlg.contentGutter + 44
                 anchors.topMargin: 24
                 spacing: 4
                 Label {
+                    Layout.fillWidth: true
                     text: I18n.t(dlg.current.title)
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     font.weight: Font.Bold
+                    wrapMode: Text.WordWrap
                 }
                 Label {
                     Layout.fillWidth: true
                     text: I18n.t(dlg.current.desc)
                     color: Theme.dim
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                     wrapMode: Text.WordWrap
                 }
             }
@@ -896,9 +968,14 @@ Popup {
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.margins: 16
+                width: 40
+                height: 40
                 iconName: "close"
                 size: 18
                 tip: I18n.t("Close")
+                focusPolicy: Qt.TabFocus
+                outlined: visualFocus
+                Accessible.name: tip
                 onClicked: dlg.close()
             }
 
@@ -908,18 +985,26 @@ Popup {
                 anchors.right: parent.right
                 anchors.top: head.bottom
                 anchors.bottom: parent.bottom
-                anchors.topMargin: 10
+                anchors.topMargin: 20
                 anchors.bottomMargin: 2
                 clip: true
                 contentHeight: page.implicitHeight + 24
+                flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: NScrollBar {}
                 SmoothScroll { flickable: body }
 
+                SettingsCard {
+                    x: dlg.contentGutter
+                    width: body.width - 2 * x
+                    height: page.implicitHeight
+                    visible: page.item !== null && dlg.section !== "storage"
+                }
+
                 Loader {
                     id: page
-                    x: 28
-                    width: body.width - 56
+                    x: dlg.contentGutter + (dlg.section === "storage" ? 0 : 16)
+                    width: body.width - 2 * x
                     sourceComponent: dlg.section === "player" ? playerPage
                                    : dlg.section === "miniplayer" ? miniPlayerPage
                                    : dlg.section === "audio" ? audioPage
@@ -1716,87 +1801,156 @@ Popup {
     Component {
         id: storagePage
         ColumnLayout {
+            id: storage
             objectName: "page-storage"
-            spacing: 0
-            SettingRow {
-                label: I18n.t("Offline songs")
-                hint: I18n.t("{n} downloaded ({size}), kept in {path}. They play without internet.",
-                             { n: downloads.count, size: downloads.sizeText, path: downloads.folderPath })
-                NButton {
-                    text: I18n.t("Open folder")
-                    onClicked: downloads.openFolder()
+            spacing: 10
+            readonly property real cacheBytes: cacheRow.phase === "idle" ? images.sizeBytes : cacheRow.shownBytes
+            readonly property real totalBytes: downloads.sizeBytes + cacheBytes
+            readonly property string cacheSize: formatSize(cacheBytes)
+            readonly property color cacheColor: Theme.alpha(Theme.text, 0.38)
+
+            // Same units as human_size() in senada/downloads.py.
+            function formatSize(n) {
+                for (const unit of ["B", "KB", "MB"]) {
+                    if (n < 1024)
+                        return unit === "MB" ? n.toFixed(1) + " MB" : Math.round(n) + " " + unit
+                    n /= 1024
+                }
+                return n.toFixed(2) + " GB"
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                Label {
+                    text: I18n.t("Total used")
+                    color: Theme.dim
+                    font.pixelSize: 13
+                }
+                Label {
+                    objectName: "storageTotal"
+                    text: storage.formatSize(storage.totalBytes)
+                    font.pixelSize: 34
+                    font.weight: Font.Bold
+                    font.features: { "tnum": 1 }
                 }
             }
-            Divider {}
-            // like the Storage settings of other music players: what the cache holds, how big it
-            // is, and what clearing it leaves alone (senada/imagecache.py)
-            // clearing it is a small show: a record spins while the covers go, pops when they are
-            // gone, music notes burst out and the size counts down to nothing
-            SettingRow {
-                id: cacheRow
-                objectName: "cacheRow"
-                property string phase: "idle"   // "spinning" while clearing, "celebrate" after
-                property real startBytes: 0
-                property real shownBytes: 0
-                property double spinSince: 0
-                function startClear() {
-                    startBytes = images.sizeBytes
-                    shownBytes = startBytes
-                    spinSince = Date.now()
-                    phase = "spinning"
-                    images.clear()
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 8
+                radius: 4
+                color: storage.totalBytes > 0 ? storage.cacheColor : Theme.pressed
+                Rectangle {
+                    width: storage.totalBytes > 0 ? parent.width * downloads.sizeBytes / storage.totalBytes : 0
+                    height: parent.height
+                    radius: parent.radius
+                    color: Theme.primary
                 }
-                function celebrate() {
-                    phase = "celebrate"
-                    const p = cacheVinyl.mapToItem(noteBurst, cacheVinyl.width / 2, cacheVinyl.height / 2)
-                    cacheVinyl.pop()
-                    noteBurst.play(p.x, p.y)
-                    countDown.restart()
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignLeft
+                spacing: 20
+                StorageLegend {
+                    swatch: Theme.primary
+                    text: I18n.t("Downloads") + "  " + downloads.sizeText
                 }
-                // the same steps as human_size() in senada/downloads.py
-                function humanSize(n) {
-                    for (const unit of ["B", "KB", "MB"]) {
-                        if (n < 1024)
-                            return unit === "MB" ? n.toFixed(1) + " MB" : Math.round(n) + " " + unit
-                        n /= 1024
-                    }
-                    return n.toFixed(2) + " GB"
+                StorageLegend {
+                    swatch: storage.cacheColor
+                    text: I18n.t("Cache") + "  " + storage.cacheSize
                 }
-                label: I18n.t("Cache")
-                hint: I18n.t("{size} of saved covers, so they show at once. Clearing it does not remove offline songs, your library or settings.",
-                             { size: phase === "idle" ? images.sizeText : humanSize(shownBytes) })
-                Component.onCompleted: images.measure()
-                Connections {
-                    target: images
-                    function onCleared() {
-                        if (cacheRow.phase !== "spinning")
-                            return
-                        // even a cache that empties at once gets to spin for a moment
-                        celebrateTimer.interval = Math.max(0, 750 - (Date.now() - cacheRow.spinSince))
-                        celebrateTimer.restart()
+            }
+            Label {
+                Layout.topMargin: 12
+                text: I18n.t("Downloads")
+                font.pixelSize: 16
+                font.weight: Font.Bold
+            }
+            Pane {
+                Layout.fillWidth: true
+                padding: 16
+                background: SettingsCard {}
+                contentItem: SettingRow {
+                    iconName: "download"
+                    label: I18n.t("Offline songs")
+                    hint: I18n.n("{n} song", "{n} songs", downloads.count) + " · " + I18n.t("plays without internet")
+                    Pill { text: downloads.sizeText }
+                    NButton {
+                        text: I18n.t("Open folder")
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 600
+                        ToolTip.text: downloads.folderPath
+                        onClicked: downloads.openFolder()
                     }
                 }
-                Timer { id: celebrateTimer; onTriggered: cacheRow.celebrate() }
-                NumberAnimation {
-                    id: countDown
-                    target: cacheRow
-                    property: "shownBytes"
-                    to: 0
-                    duration: 650
-                    easing.type: Easing.OutCubic
-                }
-                VinylSpinner {
-                    id: cacheVinyl
-                    objectName: "cacheVinyl"
-                    visible: cacheRow.phase !== "idle"
-                    spinning: cacheRow.phase === "spinning"
-                    onPopped: cacheRow.phase = "idle"
-                }
-                NButton {
-                    objectName: "clearCacheButton"
-                    text: cacheRow.phase === "spinning" || images.busy ? I18n.t("Clearing…") : I18n.t("Clear cache…")
-                    enabled: cacheRow.phase === "idle" && !images.busy
-                    onClicked: clearCacheDialog.open()
+            }
+            Label {
+                Layout.topMargin: 12
+                text: I18n.t("Cache")
+                font.pixelSize: 16
+                font.weight: Font.Bold
+            }
+            Pane {
+                Layout.fillWidth: true
+                padding: 16
+                background: SettingsCard {}
+                contentItem: SettingRow {
+                    id: cacheRow
+                    objectName: "cacheRow"
+                    property string phase: "idle"   // "spinning" while clearing, "celebrate" after
+                    property real startBytes: 0
+                    property real shownBytes: 0
+                    property double spinSince: 0
+                    function startClear() {
+                        startBytes = images.sizeBytes
+                        shownBytes = startBytes
+                        spinSince = Date.now()
+                        phase = "spinning"
+                        images.clear()
+                    }
+                    function celebrate() {
+                        phase = "celebrate"
+                        const p = cacheVinyl.mapToItem(noteBurst, cacheVinyl.width / 2, cacheVinyl.height / 2)
+                        cacheVinyl.pop()
+                        noteBurst.play(p.x, p.y)
+                        countDown.restart()
+                    }
+                    iconName: "album"
+                    label: I18n.t("Saved covers")
+                    hint: I18n.t("Artwork saved for quicker loading.")
+                    Component.onCompleted: images.measure()
+                    Connections {
+                        target: images
+                        function onCleared() {
+                            if (cacheRow.phase !== "spinning")
+                                return
+                            // even a cache that empties at once gets to spin for a moment
+                            celebrateTimer.interval = Math.max(0, 750 - (Date.now() - cacheRow.spinSince))
+                            celebrateTimer.restart()
+                        }
+                    }
+                    Timer { id: celebrateTimer; onTriggered: cacheRow.celebrate() }
+                    NumberAnimation {
+                        id: countDown
+                        target: cacheRow
+                        property: "shownBytes"
+                        to: 0
+                        duration: 650
+                        easing.type: Easing.OutCubic
+                    }
+                    VinylSpinner {
+                        id: cacheVinyl
+                        objectName: "cacheVinyl"
+                        visible: cacheRow.phase !== "idle"
+                        spinning: cacheRow.phase === "spinning"
+                        onPopped: cacheRow.phase = "idle"
+                    }
+                    Pill { text: storage.cacheSize }
+                    NButton {
+                        objectName: "clearCacheButton"
+                        text: cacheRow.phase === "spinning" || images.busy ? I18n.t("Clearing…") : I18n.t("Clear cache…")
+                        enabled: cacheRow.phase === "idle" && !images.busy
+                        onClicked: clearCacheDialog.open()
+                    }
                 }
             }
             // the notes fly over the whole dialog, not only this page
