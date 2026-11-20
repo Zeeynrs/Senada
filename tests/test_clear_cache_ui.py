@@ -1,4 +1,4 @@
-"""Settings → Profile & Library → Cache: the button asks first, then clears the saved covers."""
+"""Settings → Storage → Cache: the button asks first, then clears the saved covers."""
 
 import os
 from pathlib import Path
@@ -44,7 +44,7 @@ def install(session, window):
 
     def verify():
         try:
-            shell.navigate("settings", "profile", False)
+            shell.navigate("settings", "storage", False)
             wait_for(lambda: find("clearCacheButton") is not None, "Cache row is missing")
             button = find("clearCacheButton")
             from PySide6.QtQml import QQmlEngine

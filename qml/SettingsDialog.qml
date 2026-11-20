@@ -34,15 +34,18 @@ Popup {
     // `words` are English labels inside the section, searched in both languages
     readonly property var sections: [
         { group: "Preferences", key: "appearance", icon: "palette", title: "Appearance",
-          desc: "Language, theme and the look of the app.",
+          desc: "Language, theme, colors and glass.",
           words: ["Interface language", "Language", "Theme", "Color mode", "Dark", "Light", "Follow system",
-                  "Accent color", "Accent strength", "Color", "Logo",
-                  "Glass effect", "Glass thickness", "Liquid Glass", "Transparent", "Album cover", "Visualizer",
-                  "Full view style", "Vinyl record", "Turntable", "Full view", "Poster", "Magazine",
+                  "Accent color", "Accent strength", "Color", "Logo", "Follow the song",
+                  "Glass effect", "Glass thickness", "Liquid Glass", "Transparent", "Album cover"] },
+        { group: "Preferences", key: "player", icon: "play", title: "Player",
+          desc: "The full view, the seek bar and the player bar.",
+          words: ["Full view style", "Full view", "Visualizer", "Vinyl record", "Turntable", "Poster", "Magazine",
                   "Cinema", "Movie", "Subtitles",
-                  "Seek bar", "Progress bar", "Wave", "Waveform", "Dots", "Player bar", "Docked", "Floating",
-                  "Accent color", "Follow the song",
-                  "Mini player", "Dynamic island", "Minimize", "Mini player style", "Classic", "Sound wave",
+                  "Seek bar", "Progress bar", "Wave", "Waveform", "Dots", "Player bar", "Docked", "Floating"] },
+        { group: "Preferences", key: "miniplayer", icon: "mini-player", title: "Mini player & tray",
+          desc: "The small player while Senada is minimized, and the icon next to the clock.",
+          words: ["Mini player", "Dynamic island", "Minimize", "Mini player style", "Classic", "Sound wave",
                   "Running lyrics", "Cover glass", "Tuck into the top edge", "Notch",
                   "System tray", "Tray", "Icon in the system tray", "Keep playing when closed"] },
         { group: "Preferences", key: "audio", icon: "speaker", title: "Audio",
@@ -55,21 +58,31 @@ Popup {
           words: ["Lyrics source", "Automatic", "BetterLyrics", "LRCLIB", "KuGou", "YouTube Music", "NetEase", "Synced lyrics",
                   "Under each line", "Romanization", "Translation", "Translate with Google Translate", "Romaji",
                   "Appearance", "Size", "Font", "Alignment", "Sung line", "Karaoke", "Glow", "Serif"] },
-        { group: "Preferences", key: "discord", icon: "presence", title: "Discord",
-          desc: "Show what you are listening to on your Discord profile.",
-          words: ["Rich Presence", "Discord", "Listening to", "Show the song on Discord", "While paused", "Status"] },
-        { group: "Preferences", key: "scrobble", icon: "stats", title: "Scrobbling",
-          desc: "Add the songs you play to your Last.fm or Libre.fm profile.",
-          words: ["Scrobbling", "Scrobble", "Last.fm", "Libre.fm", "Connect", "Disconnect"] },
-        { group: "Preferences", key: "remote", icon: "smartphone", title: "Phone remote",
-          desc: "Control Senada from your phone's browser.",
-          words: ["Phone", "Remote", "QR", "Phone remote", "Control from your phone", "New link", "Copy link"] },
         { group: "Preferences", key: "shortcuts", icon: "keyboard", title: "Shortcuts",
           desc: "Keyboard shortcuts that work anywhere in the app.",
           words: ["Keyboard shortcuts", "Play / pause", "Search", "Volume up / down", "Next / previous song", "Mini player"] },
-        { group: "Preferences", key: "profile", icon: "person", title: "Profile & Library",
-          desc: "Your name and the music kept on this device.",
-          words: ["Music folders", "Local files", "Add folder", "Scan again", "Backup", "Back up", "Restore", "Automatic backups", "Offline songs", "Download", "Downloads", "Offline", "Open folder", "Display name", "Cache", "Clear cache", "Storage", "Import a playlist", "Import from Spotify", "Spotify", "YouTube Music", "YouTube", "Import", "Playlist"] },
+        { group: "Your music", key: "profile", icon: "person", title: "Profile",
+          desc: "Your name, and the music kept on this device without an account.",
+          words: ["Display name", "Name", "Account"] },
+        { group: "Your music", key: "library", icon: "library", title: "Library",
+          desc: "Playlists from other services and music folders on this computer.",
+          words: ["Import a playlist", "Import from Spotify", "Spotify", "YouTube Music", "YouTube", "Import", "Playlist",
+                  "Music folders", "Local files", "Add folder", "Scan again"] },
+        { group: "Your music", key: "storage", icon: "storage", title: "Storage",
+          desc: "Offline songs and the cache on this device.",
+          words: ["Offline songs", "Download", "Downloads", "Offline", "Open folder", "Cache", "Clear cache"] },
+        { group: "Your music", key: "backup", icon: "backup", title: "Backup",
+          desc: "Keep a copy of your library, or move it to another computer.",
+          words: ["Backup", "Back up", "Restore", "Automatic backups"] },
+        { group: "Connections", key: "discord", icon: "presence", title: "Discord",
+          desc: "Show what you are listening to on your Discord profile.",
+          words: ["Rich Presence", "Discord", "Listening to", "Show the song on Discord", "While paused", "Status"] },
+        { group: "Connections", key: "scrobble", icon: "stats", title: "Scrobbling",
+          desc: "Add the songs you play to your Last.fm or Libre.fm profile.",
+          words: ["Scrobbling", "Scrobble", "Last.fm", "Libre.fm", "Connect", "Disconnect"] },
+        { group: "Connections", key: "remote", icon: "smartphone", title: "Phone remote",
+          desc: "Control Senada from your phone's browser.",
+          words: ["Phone", "Remote", "QR", "Phone remote", "Control from your phone", "New link", "Copy link"] },
         { group: "App", key: "whatsnew", icon: "new", title: "What's new",
           desc: "What changed in each version, and which version is on this device.",
           words: ["Changelog", "Log", "Release", "Version", "On this device", "Version history"] },
@@ -80,7 +93,7 @@ Popup {
           desc: "About Senada.",
           words: ["Version", "License", "Senada"] }
     ]
-    readonly property var groups: ["Preferences", "App"]
+    readonly property var groups: ["Preferences", "Your music", "Connections", "App"]
 
     function matches(s) {
         const q = query.trim().toLowerCase()
@@ -662,81 +675,109 @@ Popup {
                 onTextChanged: dlg.query = text
             }
 
-            Repeater {
-                model: dlg.groups
-                ColumnLayout {
-                    id: grp
-                    required property string modelData
-                    readonly property var items: dlg.shown.filter(s => s.group === grp.modelData)
-                    visible: items.length > 0
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Label {
-                        Layout.topMargin: 10
-                        Layout.bottomMargin: 4
-                        leftPadding: 10
-                        text: I18n.t(grp.modelData)
-                        color: Theme.faint
-                        font.pixelSize: 12
-                        font.weight: Font.DemiBold
-                    }
-                    Repeater {
-                        model: grp.items
-                        AbstractButton {
-                            id: entry
-                            required property var modelData
-                            readonly property bool current: dlg.section === modelData.key
-                            Layout.fillWidth: true
-                            implicitHeight: 38
-                            hoverEnabled: true
-                            focusPolicy: Qt.NoFocus
-                            onClicked: dlg.section = modelData.key
-                            background: Rectangle {
-                                radius: 9
-                                color: entry.current ? (Theme.accented ? Theme.selected : Theme.pressed) : entry.hovered ? Theme.hover : "transparent"
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                                Rectangle {
-                                    visible: entry.current && Theme.accented
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 3; height: 16; radius: 1.5
-                                    color: Theme.primary
-                                }
-                            }
-                            contentItem: RowLayout {
-                                spacing: 12
-                                Icon {
-                                    Layout.leftMargin: 10
-                                    glyph: entry.modelData.icon
-                                    size: 18
-                                    color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
-                                }
+            // the sections scroll on their own when the dialog is shorter than the list
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Flickable {
+                    id: sectionList
+                    anchors.fill: parent
+                    clip: true
+                    contentHeight: sectionColumn.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: NScrollBar {}
+                    ColumnLayout {
+                        id: sectionColumn
+                        width: sectionList.width
+                        spacing: 2
+                        Repeater {
+                            model: dlg.groups
+                            ColumnLayout {
+                                id: grp
+                                required property string modelData
+                                readonly property var items: dlg.shown.filter(s => s.group === grp.modelData)
+                                visible: items.length > 0
+                                Layout.fillWidth: true
+                                spacing: 2
                                 Label {
-                                    Layout.fillWidth: true
-                                    text: I18n.t(entry.modelData.title)
-                                    font.pixelSize: 14
-                                    font.weight: entry.current ? Font.DemiBold : Font.Normal
-                                    color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
-                                    elide: Text.ElideRight
+                                    Layout.topMargin: 10
+                                    Layout.bottomMargin: 4
+                                    leftPadding: 10
+                                    text: I18n.t(grp.modelData)
+                                    color: Theme.faint
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+                                Repeater {
+                                    model: grp.items
+                                    AbstractButton {
+                                        id: entry
+                                        required property var modelData
+                                        readonly property bool current: dlg.section === modelData.key
+                                        Layout.fillWidth: true
+                                        implicitHeight: 38
+                                        hoverEnabled: true
+                                        focusPolicy: Qt.NoFocus
+                                        onClicked: dlg.section = modelData.key
+                                        background: Rectangle {
+                                            radius: 9
+                                            color: entry.current ? (Theme.accented ? Theme.selected : Theme.pressed) : entry.hovered ? Theme.hover : "transparent"
+                                            Behavior on color { ColorAnimation { duration: 120 } }
+                                            Rectangle {
+                                                visible: entry.current && Theme.accented
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: 3; height: 16; radius: 1.5
+                                                color: Theme.primary
+                                            }
+                                        }
+                                        contentItem: RowLayout {
+                                            spacing: 12
+                                            Icon {
+                                                Layout.leftMargin: 10
+                                                glyph: entry.modelData.icon
+                                                size: 18
+                                                color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
+                                            }
+                                            Label {
+                                                Layout.fillWidth: true
+                                                text: I18n.t(entry.modelData.title)
+                                                font.pixelSize: 14
+                                                font.weight: entry.current ? Font.DemiBold : Font.Normal
+                                                color: entry.current ? Theme.accentInk : entry.hovered ? Theme.text : Theme.dim
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
+
+                        Label {
+                            visible: dlg.shown.length === 0
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            leftPadding: 10
+                            rightPadding: 10
+                            text: I18n.t("No settings match “{q}”.", { q: dlg.query.trim() })
+                            color: Theme.dim
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+                // a soft fade at the bottom says there are more sections below
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 36
+                    visible: !sectionList.atYEnd
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: Theme.alpha(dlg.paneLeft, 0) }
+                        GradientStop { position: 1; color: dlg.paneLeft }
                     }
                 }
             }
-
-            Label {
-                visible: dlg.shown.length === 0
-                Layout.fillWidth: true
-                Layout.topMargin: 12
-                leftPadding: 10
-                rightPadding: 10
-                text: I18n.t("No settings match “{q}”.", { q: dlg.query.trim() })
-                color: Theme.dim
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-            }
-
-            Item { Layout.fillHeight: true }
 
             // who is listening: name and device, opens the profile section
             AbstractButton {
@@ -855,13 +896,18 @@ Popup {
                     id: page
                     x: 28
                     width: body.width - 56
-                    sourceComponent: dlg.section === "audio" ? audioPage
+                    sourceComponent: dlg.section === "player" ? playerPage
+                                   : dlg.section === "miniplayer" ? miniPlayerPage
+                                   : dlg.section === "audio" ? audioPage
                                    : dlg.section === "lyrics" ? lyricsPage
                                    : dlg.section === "discord" ? discordPage
                                    : dlg.section === "scrobble" ? scrobblePage
                                    : dlg.section === "remote" ? remotePage
                                    : dlg.section === "shortcuts" ? shortcutsPage
                                    : dlg.section === "profile" ? profilePage
+                                   : dlg.section === "library" ? libraryPage
+                                   : dlg.section === "storage" ? storagePage
+                                   : dlg.section === "backup" ? backupPage
                                    : dlg.section === "updates" ? updatesPage
                                    : dlg.section === "about" ? aboutPage
                                    : dlg.section === "whatsnew" ? whatsNewPage
@@ -875,6 +921,7 @@ Popup {
     Component {
         id: appearancePage
         ColumnLayout {
+            objectName: "page-appearance"
             spacing: 0
             SettingRow {
                 label: I18n.t("Interface language")
@@ -970,7 +1017,14 @@ Popup {
                     font.features: { "tnum": 1 }
                 }
             }
-            Divider {}
+        }
+    }
+
+    Component {
+        id: playerPage
+        ColumnLayout {
+            objectName: "page-player"
+            spacing: 0
             SettingBlock {
                 label: I18n.t("Full view style")
                 hint: ({
@@ -1029,7 +1083,14 @@ Popup {
                     onToggled: session.visualizerEnabled = checked
                 }
             }
-            Divider {}
+        }
+    }
+
+    Component {
+        id: miniPlayerPage
+        ColumnLayout {
+            objectName: "page-miniplayer"
+            spacing: 0
             SettingRow {
                 label: I18n.t("Mini player")
                 hint: I18n.t("A small player at the top of the screen while Senada is minimized: arrow down for the lyrics. Ctrl+M opens it any time.")
@@ -1545,6 +1606,7 @@ Popup {
     Component {
         id: profilePage
         ColumnLayout {
+            objectName: "page-profile"
             spacing: 0
             SettingRow {
                 label: I18n.t("Display name")
@@ -1557,6 +1619,17 @@ Popup {
                 }
             }
             Divider {}
+            Note {
+                text: I18n.t("Senada needs no account. Music comes from YouTube Music; liked songs, playlists and history are stored on this device ({path}).", { path: session.libraryPath })
+            }
+        }
+    }
+
+    Component {
+        id: libraryPage
+        ColumnLayout {
+            objectName: "page-library"
+            spacing: 0
             SettingBlock {
                 label: I18n.t("Import a playlist")
                 hint: I18n.t("Paste a link to a public (or unlisted) playlist or album from Spotify or YouTube Music. No login; the whole playlist is imported.")
@@ -1579,6 +1652,48 @@ Popup {
                 }
             }
             Divider {}
+            SettingBlock {
+                label: I18n.t("Music folders")
+                hint: (localfiles.folders.length
+                       ? I18n.n("{n} song found. ", "{n} songs found. ", localfiles.count)
+                       : "")
+                      + I18n.t("The music files in these folders play in Senada next to YouTube Music, under Your Library → Local files.")
+                      + (localfiles.readsTags ? "" : " " + I18n.t("Titles come from the file names (install mutagen to read the tags)."))
+                Repeater {
+                    model: localfiles.folders
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Icon { glyph: "library"; size: 16; color: Theme.dim }
+                        Label { Layout.fillWidth: true; text: modelData; elide: Text.ElideMiddle; font.pixelSize: 13 }
+                        IconButton { iconName: "close"; size: 14; tint: Theme.dim; tip: I18n.t("Remove"); onClicked: localfiles.removeFolder(modelData) }
+                    }
+                }
+                RowLayout {
+                    spacing: 10
+                    NButton { text: I18n.t("Add folder…"); iconName: "add"; onClicked: musicFolder.open() }
+                    NButton {
+                        visible: localfiles.folders.length > 0
+                        text: localfiles.scanning ? I18n.t("Looking for songs…") : I18n.t("Scan again")
+                        enabled: !localfiles.scanning
+                        onClicked: localfiles.rescan()
+                    }
+                }
+            }
+            Dialogs.FolderDialog {
+                id: musicFolder
+                title: I18n.t("Add a music folder")
+                onAccepted: localfiles.addFolder(selectedFolder)
+            }
+        }
+    }
+
+    Component {
+        id: storagePage
+        ColumnLayout {
+            objectName: "page-storage"
+            spacing: 0
             SettingRow {
                 label: I18n.t("Offline songs")
                 hint: I18n.t("{n} downloaded ({size}), kept in {path}. They play without internet.",
@@ -1641,42 +1756,14 @@ Popup {
                     }
                 }
             }
-            Divider {}
-            SettingBlock {
-                label: I18n.t("Music folders")
-                hint: (localfiles.folders.length
-                       ? I18n.n("{n} song found. ", "{n} songs found. ", localfiles.count)
-                       : "")
-                      + I18n.t("The music files in these folders play in Senada next to YouTube Music, under Your Library → Local files.")
-                      + (localfiles.readsTags ? "" : " " + I18n.t("Titles come from the file names (install mutagen to read the tags)."))
-                Repeater {
-                    model: localfiles.folders
-                    delegate: RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 10
-                        Icon { glyph: "library"; size: 16; color: Theme.dim }
-                        Label { Layout.fillWidth: true; text: modelData; elide: Text.ElideMiddle; font.pixelSize: 13 }
-                        IconButton { iconName: "close"; size: 14; tint: Theme.dim; tip: I18n.t("Remove"); onClicked: localfiles.removeFolder(modelData) }
-                    }
-                }
-                RowLayout {
-                    spacing: 10
-                    NButton { text: I18n.t("Add folder…"); iconName: "add"; onClicked: musicFolder.open() }
-                    NButton {
-                        visible: localfiles.folders.length > 0
-                        text: localfiles.scanning ? I18n.t("Looking for songs…") : I18n.t("Scan again")
-                        enabled: !localfiles.scanning
-                        onClicked: localfiles.rescan()
-                    }
-                }
-            }
-            Dialogs.FolderDialog {
-                id: musicFolder
-                title: I18n.t("Add a music folder")
-                onAccepted: localfiles.addFolder(selectedFolder)
-            }
-            Divider {}
+        }
+    }
+
+    Component {
+        id: backupPage
+        ColumnLayout {
+            objectName: "page-backup"
+            spacing: 0
             SettingRow {
                 label: I18n.t("Backup")
                 hint: I18n.t("Liked songs, playlists, saved albums and artists, history and settings in one file, to keep safe or to move to another computer. Offline songs are not in it.")
@@ -1717,10 +1804,6 @@ Popup {
                 onAccepted: restoreDialog.openFor(selectedFile)
             }
             RestoreDialog { id: restoreDialog }
-            Divider {}
-            Note {
-                text: I18n.t("Senada needs no account. Music comes from YouTube Music; liked songs, playlists and history are stored on this device ({path}).", { path: session.libraryPath })
-            }
         }
     }
 
