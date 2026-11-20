@@ -15,6 +15,17 @@ Item {
     property url fallback                 // shown instead when `source` cannot be loaded
     property bool failed: false
     onSourceChanged: failed = false
+    // covers from the internet are loaded from the copy on disk (senada/imagecache.py);
+    // "" while that copy is being downloaded
+    readonly property string remote: failed && fallback.toString() !== "" ? fallback.toString() : source.toString()
+    property string shown: ""
+    function refresh() { shown = typeof images === "undefined" ? remote : images.cached(remote) }
+    onRemoteChanged: refresh()
+    Component.onCompleted: refresh()
+    Connections {
+        target: typeof images === "undefined" ? null : images
+        function onStored(url) { if (url === root.remote) root.refresh() }
+    }
     readonly property bool ready: img.status === Image.Ready
     readonly property real cornerRadius: (round || scalloped) ? width / 2 : radius
     readonly property int loadSize: Math.ceil(Math.max(width, height) * Screen.devicePixelRatio)
@@ -77,8 +88,17 @@ Item {
     Image {
         id: img
         anchors.fill: parent
-        source: root.failed && root.fallback.toString() !== "" ? root.fallback : root.source
-        onStatusChanged: if (status === Image.Error && !root.failed) root.failed = true
+        source: root.shown
+        onStatusChanged: {
+            if (status !== Image.Error)
+                return
+            if (root.shown !== root.remote && typeof images !== "undefined") {
+                images.forget(root.remote)  // a damaged saved copy: try the address itself
+                root.refresh()
+            } else if (!root.failed) {
+                root.failed = true
+            }
+        }
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         sourceSize.width: root.loadSize

@@ -24,6 +24,7 @@ from .remote import Remote
 from .scrobble import Scrobbler
 from .stats import Stats
 from .effects import AudioEffects
+from .imagecache import ImageCache
 from .instance import Instance, ask_running_to_show
 from .lyrics import Lyrics
 from .player import Player
@@ -131,6 +132,7 @@ def main():
     remote = Remote(player, settings, lyrics)    # the phone remote (off until switched on)
     remote.toast.connect(session.toast)
     backup = Backup(store, settings)
+    images = ImageCache()  # cover art kept on disk between starts
     backup.toast.connect(session.toast)
     backup.restored.connect(library.reload)
     backup.restartRequested.connect(request_restart)  # restored settings apply from the next start
@@ -145,6 +147,7 @@ def main():
         plays.flush()  # the song playing now counts too
         stats.close()
         remote.close()
+        images.close()
         audio_engine.quit()
         visualizer.stop()
         player.stop()
@@ -160,7 +163,7 @@ def main():
     for name, obj in (("session", session), ("player", player), ("library", library),
                       ("lyrics", lyrics), ("visualizer", visualizer), ("downloads", downloads), ("effects", effects), ("discord", discord),
                       ("updater", updater), ("backup", backup), ("stats", stats), ("scrobbler", scrobbler),
-                      ("localfiles", localfiles), ("remote", remote)):
+                      ("localfiles", localfiles), ("remote", remote), ("images", images)):
         ctx.setContextProperty(name, obj)
     engine.load(str(ROOT / "qml" / "Main.qml"))
     if not engine.rootObjects():
